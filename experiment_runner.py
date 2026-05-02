@@ -122,7 +122,7 @@ def run_experiment(
 
     max_batches = cfg.get("max_batches_per_epoch", None)
     epochs = override_epochs if override_epochs is not None else cfg["epochs"]
-    epoch_losses = []]
+    epoch_losses = []
     for epoch in range(epochs):
         print(f"  Epoch {epoch+1}/{epochs} started...")
         loss = train_one_epoch(model, dataloader, optimizer, criterion, device, max_batches)

@@ -94,3 +94,6 @@ if __name__ == "__main__":
         en_samples=args.en,
         zh_samples=args.zh,
     )
+    # Явный выход для предотвращения ошибок GIL при финализации
+    import sys
+    sys.exit(0)
