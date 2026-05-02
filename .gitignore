@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Data files (large)
+multilingual_corpus.txt
+multilingual_vocab.pt
+pretrain_vocab.pt
+dummy_*.txt
+
+# Model checkpoints
+*.pth
+*.pt
+!multilingual_vocab.pt
+
+# Results (optional — можно коммитить для воспроизводимости)
+# experiment_results.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
