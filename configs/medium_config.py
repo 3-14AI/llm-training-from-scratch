@@ -8,6 +8,9 @@ MODEL_CONFIG = {
     "forward_expansion": 4,
     "dropout": 0.1,
     "max_length": 256,
+    "use_compression": False, # New parameter
+    "chunk_size": 16,         # New parameter
+    "compressor_layers": 3,   # New parameter
 }
 
 TRAINING_CONFIG = {

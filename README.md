@@ -1,3 +1,4 @@
+
 # LLM Training From Scratch
 
 This repository provides a comprehensive framework for training Large Language Models (LLMs) from scratch using PyTorch. It includes scripts for data preparation, model architecture definition, pre-training, fine-tuning (SFT, LoRA), inference, configuration management, and training monitoring.
@@ -34,6 +35,10 @@ The LLM architecture implemented here is a **Transformer model** built from fund
 - **Positional Encoding**: Injects information about the relative or absolute position of tokens in the sequence.
 - **Layer Normalization and Dropout**: Regularization techniques to improve training stability and generalization.
 
+### Context Compression
+
+To handle longer contexts more efficiently, a **ContextCompressor** module has been introduced. This module is a smaller transformer that learns to condense a chunk of input tokens into a single vector representation. The main transformer can then process a sequence of these compressed vectors, effectively increasing its receptive field without a linear increase in computational cost. The `CompressedTransformer` integrates this compressor, allowing for joint training of both models.
+
 ### Directory Structure
 
 ```
@@ -42,7 +47,7 @@ llm-training-from-scratch/
 │   ├── tokenizer.py             # Script for basic tokenization and vocabulary management
 │   └── dataset_creator.py       # Script for creating PyTorch datasets and dataloaders
 ├── model_architecture/
-│   └── transformer.py           # PyTorch implementation of the Transformer model
+│   └── transformer.py           # PyTorch implementation of the Transformer model, including ContextCompressor
 ├── pretraining/
 │   └── pretrain.py              # Script for pre-training the LLM on a large corpus
 ├── fine_tuning/
@@ -120,10 +125,16 @@ The `data_preparation` directory contains scripts for tokenization and dataset c
 
 ### Pre-training
 
-The `pretraining/pretrain.py` script handles the initial training of the LLM on a large text corpus.
+The `pretraining/pretrain.py` script handles the initial training of the LLM on a large text corpus. It now supports an optional context compression mode.
 
+To pre-train a standard Transformer:
 ```bash
 python pretraining/pretrain.py
+```
+
+To pre-train a `CompressedTransformer` with context compression (e.g., chunk size 8, 2 compressor layers):
+```bash
+python pretraining/pretrain.py --use_compression --chunk_size 8 --compressor_layers 2
 ```
 
 **Multi-GPU Training (DeepSpeed/FSDP)**:
@@ -156,15 +167,25 @@ The `finetune.py` includes a `LoRALayer` and `inject_lora` function as a concept
 
 ### Inference
 
-Use `inference/generate.py` to generate text using a trained LLM.
+Use `inference/generate.py` to generate text using a trained LLM. It also supports inference with the `CompressedTransformer`.
 
+To generate text with a standard Transformer:
 ```bash
 python inference/generate.py
 ```
 
+To generate text with a `CompressedTransformer` (ensure `chunk_size` matches training):
+```bash
+python inference/generate.py --use_compression --chunk_size 8 --model_path pretrained_llm_compressed.pth
+```
+
 ### Configuration
 
-Model and training configurations are managed in the `configs/` directory. Separate files are provided for different model sizes (small, medium, large).
+Model and training configurations are managed in the `configs/` directory. Separate files are provided for different model sizes (small, medium, large). These now include parameters for context compression:
+
+-   `use_compression`: Boolean, whether to use the `CompressedTransformer`.
+-   `chunk_size`: Integer, the size of the input token chunks to be compressed.
+-   `compressor_layers`: Integer, the number of transformer blocks in the `ContextCompressor`.
 
 To use a specific configuration, you would import it into your training or inference script:
 
