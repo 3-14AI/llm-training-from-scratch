@@ -1,21 +1,43 @@
+"""
+run_e2e_tests.py
+================
+E2E тест-раннер для всех серий экспериментов.
+
+Режимы:
+  --mode e2e    — быстрый прогон на CPU (маленький чанк данных, 1 эпоха, 3 батча)
+  --mode full   — полный прогон (требует GPU ≥12 ГБ VRAM)
+
+Пример запуска e2e-теста:
+  python run_e2e_tests.py --mode e2e --data multilingual_corpus.txt
+
+Пример полного запуска:
+  python run_e2e_tests.py --mode full --data multilingual_corpus.txt
+"""
+
 import os
+import sys
+import json
+import time
+import argparse
+import traceback
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from torch.optim import Adam
-from torch.utils.data import DataLoader
-from model_architecture.transformer import Transformer, CompressedTransformer
-from data_preparation.dataset_creator import create_dataset
-import time
-import json
-import sys
-from pathlib import Path
 
 # Добавляем корень репозитория в PYTHONPATH
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from experiment_configs import ALL_EXPERIMENTS, get_e2e_configs
+from model_architecture.transformer import Transformer, CompressedTransformer
+from data_preparation.dataset_creator import create_dataset
+from scripts.experiment_configs import ALL_EXPERIMENTS, get_e2e_configs
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Утилиты
+# ─────────────────────────────────────────────────────────────────────────────
 
 def count_params(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -77,9 +99,13 @@ def train_one_epoch(
 
         total_loss += loss.item()
         n_batches += 1
-            
+
     return total_loss / max(n_batches, 1)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Основная функция запуска одного эксперимента
+# ─────────────────────────────────────────────────────────────────────────────
 
 def run_experiment(
     exp_name: str,
@@ -88,7 +114,6 @@ def run_experiment(
     vocab_file: str,
     device: torch.device,
     mode: str = "e2e",
-    override_epochs: int = None,
 ) -> dict:
     """
     Запускает один эксперимент и возвращает словарь с результатами.
@@ -121,13 +146,13 @@ def run_experiment(
     criterion = nn.CrossEntropyLoss(ignore_index=0)
 
     max_batches = cfg.get("max_batches_per_epoch", None)
-    epochs = override_epochs if override_epochs is not None else cfg["epochs"]
+    epochs = cfg["epochs"]
+
     epoch_losses = []
     for epoch in range(epochs):
-        print(f"  Epoch {epoch+1}/{epochs} started...")
         loss = train_one_epoch(model, dataloader, optimizer, criterion, device, max_batches)
         epoch_losses.append(loss)
-        print(f"  Epoch {epoch+1}/{epochs} finished, loss={loss:.4f}")
+        print(f"  Epoch {epoch+1}/{epochs}  loss={loss:.4f}")
 
     elapsed = time.time() - t0
     final_loss = epoch_losses[-1]
@@ -149,15 +174,16 @@ def run_experiment(
         "elapsed_seconds": round(elapsed, 2),
         "status": "ok",
     }
-    print(f"Experiment {exp_name} finished in {elapsed:.1f}s with final loss={final_loss:.4f}")
+    print(f"  Done in {elapsed:.1f}s  |  final_loss={final_loss:.4f}")
     return result
 
 
-def main():
-    import argparse
-    import traceback
+# ─────────────────────────────────────────────────────────────────────────────
+# Запуск всех экспериментов
+# ─────────────────────────────────────────────────────────────────────────────
 
-    parser = argparse.ArgumentParser(description="Experiment runner")
+def main():
+    parser = argparse.ArgumentParser(description="E2E experiment runner")
     parser.add_argument(
         "--mode", choices=["e2e", "full"], default="e2e",
         help="'e2e' — быстрый CPU-тест; 'full' — полный GPU-прогон"
@@ -175,40 +201,10 @@ def main():
         help="Файл для сохранения результатов"
     )
     parser.add_argument(
-        "--exp_name", type=str, default=None,
-        help="Запустить только указанный эксперимент. Если не указан, запускаются все."
-    )
-    parser.add_argument(
         "--series", type=int, nargs="*", default=None,
         help="Запустить только указанные серии (1, 2, 3). По умолчанию — все."
     )
-    parser.add_argument(
-        "--log_file", type=str, default=None,
-        help="Путь к файлу для записи логов (stdout/stderr)"
-    )
-    parser.add_argument(
-        "--epochs", type=int, default=None,
-        help="Переопределить количество эпох обучения"
-    )
-    # Кастомные параметры модели
-    parser.add_argument("--embed_size", type=int, default=None)
-    parser.add_argument("--num_layers", type=int, default=None)
-    parser.add_argument("--heads", type=int, default=None)
-    parser.add_argument("--forward_expansion", type=int, default=4)
-    parser.add_argument("--dropout", type=float, default=0.1)
-    parser.add_argument("--max_length", type=int, default=128)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=3e-4)
-    parser.add_argument("--use_compression", action="store_true")
-    parser.add_argument("--chunk_size", type=int, default=8)
-    parser.add_argument("--compressor_layers", type=int, default=2)
-
     args = parser.parse_args()
-
-    # Перенаправляем stdout/stderr, если указан log_file
-    if args.log_file:
-        sys.stdout = open(args.log_file, 'w', encoding='utf-8', buffering=1) # Line-buffered
-        sys.stderr = sys.stdout
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\n{'='*60}")
@@ -223,43 +219,14 @@ def main():
         sys.exit(1)
 
     # Выбор конфигов
-    if args.exp_name == "custom":
-        # Создаем кастомный конфиг из аргументов
-        configs = {
-            "custom": {
-                "series": 0,
-                "group": "custom",
-                "use_compression": args.use_compression,
-                "embed_size": args.embed_size or 128,
-                "num_layers": args.num_layers or 2,
-                "heads": args.heads or 4,
-                "forward_expansion": args.forward_expansion,
-                "dropout": args.dropout,
-                "max_length": args.max_length,
-                "block_size": args.max_length,
-                "batch_size": args.batch_size,
-                "lr": args.lr,
-                "epochs": args.epochs or 1,
-                "chunk_size": args.chunk_size,
-                "compressor_layers": args.compressor_layers,
-            }
-        }
+    if args.mode == "e2e":
+        configs = get_e2e_configs()
     else:
-        if args.mode == "e2e":
-            configs = get_e2e_configs()
-        else:
-            configs = ALL_EXPERIMENTS
+        configs = ALL_EXPERIMENTS
 
-        # Фильтрация по сериям
-        if args.series:
-            configs = {k: v for k, v in configs.items() if v.get("series") in args.series}
-
-        # Фильтрация по имени эксперимента
-        if args.exp_name:
-            if args.exp_name not in configs:
-                print(f"Error: Experiment '{args.exp_name}' not found in selected configs.")
-                sys.exit(1)
-            configs = {args.exp_name: configs[args.exp_name]}
+    # Фильтрация по сериям
+    if args.series:
+        configs = {k: v for k, v in configs.items() if v.get("series") in args.series}
 
     print(f"Total experiments to run: {len(configs)}\n")
 
@@ -269,7 +236,7 @@ def main():
     for exp_name, cfg in configs.items():
         try:
             res = run_experiment(
-                exp_name, cfg, args.data, args.vocab, device, mode=args.mode, override_epochs=args.epochs
+                exp_name, cfg, args.data, args.vocab, device, mode=args.mode
             )
             results[exp_name] = res
         except Exception as exc:

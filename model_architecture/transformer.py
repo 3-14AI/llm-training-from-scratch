@@ -1,10 +1,22 @@
+from typing import Union
+from typing import Optional, Any
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, embed_size, heads):
+    """
+    Модуль Multi-Head Self Attention для трансформера.
+    """
+    def __init__(self, embed_size: int, heads: int) -> None:
+        """
+        Инициализирует MultiHeadSelfAttention.
+
+        Аргументы:
+            embed_size (int): Размерность эмбеддингов.
+            heads (int): Количество голов внимания.
+        """
         super(MultiHeadSelfAttention, self).__init__()
         self.embed_size = embed_size
         self.heads = heads
@@ -19,7 +31,19 @@ class MultiHeadSelfAttention(nn.Module):
         self.queries = nn.Linear(self.embed_size, self.embed_size, bias=False)
         self.fc_out = nn.Linear(heads * self.head_dim, embed_size)
 
-    def forward(self, values, keys, query, mask):
+    def forward(self, values: torch.Tensor, keys: torch.Tensor, query: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+        """
+        Выполняет прямой проход механизма внимания.
+
+        Аргументы:
+            values (torch.Tensor): Тензор значений (Values).
+            keys (torch.Tensor): Тензор ключей (Keys).
+            query (torch.Tensor): Тензор запросов (Query).
+            mask (Optional[torch.Tensor]): Маска внимания.
+
+        Возвращает:
+            torch.Tensor: Выходной тензор после механизма внимания.
+        """
         N = query.shape[0]
         value_len, key_len, query_len = values.shape[1], keys.shape[1], query.shape[1]
 
@@ -54,7 +78,19 @@ class MultiHeadSelfAttention(nn.Module):
         return out
 
 class TransformerBlock(nn.Module):
-    def __init__(self, embed_size, heads, dropout, forward_expansion):
+    """
+    Один блок трансформера (энкодера).
+    """
+    def __init__(self, embed_size: int, heads: int, dropout: float, forward_expansion: int) -> None:
+        """
+        Инициализирует блок трансформера.
+
+        Аргументы:
+            embed_size (int): Размерность эмбеддингов.
+            heads (int): Количество голов внимания.
+            dropout (float): Вероятность dropout.
+            forward_expansion (int): Коэффициент расширения размерности в Feed Forward слое.
+        """
         super(TransformerBlock, self).__init__()
         self.attention = MultiHeadSelfAttention(embed_size, heads)
         self.norm1 = nn.LayerNorm(embed_size)
@@ -68,7 +104,19 @@ class TransformerBlock(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, value, key, query, mask):
+    def forward(self, value: torch.Tensor, key: torch.Tensor, query: torch.Tensor, mask: Optional[torch.Tensor]) -> torch.Tensor:
+        """
+        Выполняет прямой проход блока трансформера.
+
+        Аргументы:
+            value (torch.Tensor): Тензор значений.
+            key (torch.Tensor): Тензор ключей.
+            query (torch.Tensor): Тензор запросов.
+            mask (Optional[torch.Tensor]): Маска внимания.
+
+        Возвращает:
+            torch.Tensor: Выходной тензор блока.
+        """
         attention = self.attention(value, key, query, mask)
         x = self.dropout(self.norm1(attention + query))
         forward = self.feed_forward(x)
@@ -76,9 +124,26 @@ class TransformerBlock(nn.Module):
         return out
 
 class ContextCompressor(nn.Module):
+    """
+    Модуль для сжатия контекста (компрессор контекста).
+    Разбивает входную последовательность на блоки и сжимает каждый блок в один вектор.
+    """
     def __init__(
-        self, vocab_size, embed_size, num_layers, heads, device, forward_expansion, dropout, chunk_size
-    ):
+        self, vocab_size: int, embed_size: int, num_layers: int, heads: int, device: Union[str, torch.device], forward_expansion: int, dropout: float, chunk_size: int
+    ) -> None:
+        """
+        Инициализирует компрессор контекста.
+
+        Аргументы:
+            vocab_size (int): Размер словаря.
+            embed_size (int): Размерность эмбеддингов.
+            num_layers (int): Количество слоев в компрессоре.
+            heads (int): Количество голов внимания.
+            device (Union[str, torch.device]): Устройство (CPU/GPU) для вычислений.
+            forward_expansion (int): Расширение размерности в FF слоях.
+            dropout (float): Вероятность dropout.
+            chunk_size (int): Размер блока (chunk), который сжимается в один вектор.
+        """
         super(ContextCompressor, self).__init__()
         self.embed_size = embed_size
         self.device = device
@@ -99,7 +164,16 @@ class ContextCompressor(nn.Module):
         # Learnable query for compression - one per chunk
         self.compress_query = nn.Parameter(torch.randn(1, 1, embed_size))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Выполняет прямой проход компрессора.
+
+        Аргументы:
+            x (torch.Tensor): Входной тензор токенов формы (N, seq_length).
+
+        Возвращает:
+            torch.Tensor: Тензор сжатых эмбеддингов формы (N, num_chunks, embed_size).
+        """
         N, seq_length = x.shape
         # x shape: (N, seq_length)
         # We assume seq_length is a multiple of chunk_size for simplicity
@@ -133,9 +207,25 @@ class ContextCompressor(nn.Module):
         return compressed
 
 class Encoder(nn.Module):
+    """
+    Энкодер трансформера.
+    """
     def __init__(
-        self, vocab_size, embed_size, num_layers, heads, device, forward_expansion, dropout, max_length
-    ):
+        self, vocab_size: int, embed_size: int, num_layers: int, heads: int, device: Union[str, torch.device], forward_expansion: int, dropout: float, max_length: int
+    ) -> None:
+        """
+        Инициализирует энкодер.
+
+        Аргументы:
+            vocab_size (int): Размер словаря.
+            embed_size (int): Размерность эмбеддингов.
+            num_layers (int): Количество слоев энкодера.
+            heads (int): Количество голов внимания.
+            device (Union[str, torch.device]): Устройство.
+            forward_expansion (int): Расширение в FF слоях.
+            dropout (float): Dropout.
+            max_length (int): Максимальная длина последовательности для позиционных эмбеддингов.
+        """
         super(Encoder, self).__init__()
         self.embed_size = embed_size
         self.device = device
@@ -153,7 +243,18 @@ class Encoder(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, mask, input_embeddings=None):
+    def forward(self, x: Optional[torch.Tensor], mask: Optional[torch.Tensor], input_embeddings: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Прямой проход энкодера.
+
+        Аргументы:
+            x (Optional[torch.Tensor]): Входной тензор токенов. Может быть None, если переданы input_embeddings.
+            mask (Optional[torch.Tensor]): Маска внимания.
+            input_embeddings (Optional[torch.Tensor]): Опциональные готовые эмбеддинги.
+
+        Возвращает:
+            torch.Tensor: Выходные представления энкодера.
+        """
         if input_embeddings is not None:
             # Use provided embeddings (e.g. from compressor)
             out = input_embeddings
@@ -171,23 +272,38 @@ class Encoder(nn.Module):
         return out
 
 class DecoderBlock(nn.Module):
-    def __init__(self, embed_size, heads, forward_expansion, dropout, device):
+    """
+    Блок декодера трансформера.
+    """
+    def __init__(self, embed_size: int, heads: int, forward_expansion: int, dropout: float, device: Union[str, torch.device]) -> None:
+        """
+        Инициализирует блок декодера.
+        """
         super(DecoderBlock, self).__init__()
         self.attention = MultiHeadSelfAttention(embed_size, heads)
         self.norm = nn.LayerNorm(embed_size)
         self.transformer_block = TransformerBlock(embed_size, heads, dropout, forward_expansion)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, value, key, src_mask, trg_mask):
+    def forward(self, x: torch.Tensor, value: torch.Tensor, key: torch.Tensor, src_mask: Optional[torch.Tensor], trg_mask: torch.Tensor) -> torch.Tensor:
+        """
+        Прямой проход блока декодера.
+        """
         attention = self.attention(x, x, x, trg_mask)
         query = self.dropout(self.norm(attention + x))
         out = self.transformer_block(value, key, query, src_mask)
         return out
 
 class Decoder(nn.Module):
+    """
+    Декодер трансформера.
+    """
     def __init__(
-        self, vocab_size, embed_size, num_layers, heads, forward_expansion, dropout, device, max_length
-    ):
+        self, vocab_size: int, embed_size: int, num_layers: int, heads: int, forward_expansion: int, dropout: float, device: Union[str, torch.device], max_length: int
+    ) -> None:
+        """
+        Инициализирует декодер.
+        """
         super(Decoder, self).__init__()
         self.device = device
         self.word_embedding = nn.Embedding(vocab_size, embed_size)
@@ -202,7 +318,10 @@ class Decoder(nn.Module):
         self.fc_out = nn.Linear(embed_size, vocab_size)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, enc_out, src_mask, trg_mask):
+    def forward(self, x: torch.Tensor, enc_out: torch.Tensor, src_mask: Optional[torch.Tensor], trg_mask: torch.Tensor) -> torch.Tensor:
+        """
+        Прямой проход декодера.
+        """
         N, seq_length = x.shape
         positions = torch.arange(0, seq_length).expand(N, seq_length).to(self.device)
         x = self.dropout(self.word_embedding(x) + self.position_embedding(positions))
@@ -214,10 +333,17 @@ class Decoder(nn.Module):
         return out
 
 class Transformer(nn.Module):
+    """
+    Стандартная модель Трансформера (seq2seq).
+    """
     def __init__(
-        self, src_vocab_size, trg_vocab_size, src_pad_idx, trg_pad_idx, embed_size=256, num_layers=6, 
-        forward_expansion=4, heads=8, dropout=0, device="cuda", max_length=100
-    ):
+        self, src_vocab_size: int, trg_vocab_size: int, src_pad_idx: int, trg_pad_idx: int,
+        embed_size: int = 256, num_layers: int = 6, forward_expansion: int = 4,
+        heads: int = 8, dropout: float = 0.0, device: Union[str, torch.device] = "cuda", max_length: int = 100
+    ) -> None:
+        """
+        Инициализирует модель Трансформер.
+        """
         super(Transformer, self).__init__()
 
         self.encoder = Encoder(
@@ -232,19 +358,28 @@ class Transformer(nn.Module):
         self.trg_pad_idx = trg_pad_idx
         self.device = device
 
-    def make_src_mask(self, src):
+    def make_src_mask(self, src: Optional[torch.Tensor]) -> Optional[torch.Tensor]:
+        """
+        Создает маску для исходной последовательности (чтобы игнорировать pad-токены).
+        """
         if src is None: return None
         src_mask = (src != self.src_pad_idx).unsqueeze(1).unsqueeze(2)
         return src_mask.to(self.device)
 
-    def make_trg_mask(self, trg):
+    def make_trg_mask(self, trg: torch.Tensor) -> torch.Tensor:
+        """
+        Создает маску для целевой последовательности (чтобы предотвратить 'заглядывание' вперед).
+        """
         N, trg_len = trg.shape
         trg_mask = torch.tril(torch.ones((trg_len, trg_len))).expand(
             N, 1, trg_len, trg_len
         )
         return trg_mask.to(self.device)
 
-    def forward(self, src, trg):
+    def forward(self, src: torch.Tensor, trg: torch.Tensor) -> torch.Tensor:
+        """
+        Прямой проход Трансформера.
+        """
         src_mask = self.make_src_mask(src)
         trg_mask = self.make_trg_mask(trg)
         enc_src = self.encoder(src, src_mask)
@@ -252,11 +387,18 @@ class Transformer(nn.Module):
         return out
 
 class CompressedTransformer(nn.Module):
+    """
+    Модель Трансформера со сжатием контекста.
+    """
     def __init__(
-        self, src_vocab_size, trg_vocab_size, src_pad_idx, trg_pad_idx, 
-        embed_size=256, num_layers=6, forward_expansion=4, heads=8, dropout=0, 
-        device="cuda", max_length=100, chunk_size=8, compressor_layers=2
-    ):
+        self, src_vocab_size: int, trg_vocab_size: int, src_pad_idx: int, trg_pad_idx: int,
+        embed_size: int = 256, num_layers: int = 6, forward_expansion: int = 4,
+        heads: int = 8, dropout: float = 0.0, device: Union[str, torch.device] = "cuda",
+        max_length: int = 100, chunk_size: int = 8, compressor_layers: int = 2
+    ) -> None:
+        """
+        Инициализирует модель CompressedTransformer.
+        """
         super(CompressedTransformer, self).__init__()
         
         self.compressor = ContextCompressor(
@@ -271,7 +413,10 @@ class CompressedTransformer(nn.Module):
         self.chunk_size = chunk_size
         self.device = device
 
-    def forward(self, src, trg):
+    def forward(self, src: torch.Tensor, trg: torch.Tensor) -> torch.Tensor:
+        """
+        Прямой проход Трансформера.
+        """
         # src shape: (N, src_len)
         # Ensure src_len is multiple of chunk_size
         N, src_len = src.shape

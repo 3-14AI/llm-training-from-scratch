@@ -24,11 +24,11 @@ running_tasks = {}
 task_counter = 0
 
 # Путь к корневой директории репозитория
-REPO_ROOT = Path(__file__).parent
+REPO_ROOT = Path(__file__).parent.parent
 
 # Загрузка конфигов экспериментов для валидации
 try:
-    from experiment_configs import ALL_EXPERIMENTS
+    from scripts.experiment_configs import ALL_EXPERIMENTS
 except ImportError:
     logger.error("Не удалось загрузить experiment_configs.py. Убедитесь, что файл существует.")
     ALL_EXPERIMENTS = {}
