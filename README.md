@@ -109,7 +109,7 @@ For a reproducible and isolated environment, it is highly recommended to use Doc
 
 The `data_preparation` directory contains scripts for tokenization and dataset creation.
 
--   **`tokenizer.py`**: Implements a `SimpleTokenizer` for basic word-level tokenization. You can extend this to use more advanced tokenization methods (e.g., BPE, WordPiece) as needed.
+-   **`tokenizer.py`**: Implements a `BPETokenizer` for BPE subword tokenization. You can extend this to use more advanced tokenization methods (e.g., BPE, WordPiece) as needed.
 
     To train a tokenizer and save its vocabulary:
     ```bash

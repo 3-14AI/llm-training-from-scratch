@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
-from data_preparation.tokenizer import SimpleTokenizer
+from data_preparation.tokenizer import BPETokenizer
 
 class TextDataset(Dataset):
     def __init__(self, tokenized_data, block_size):
@@ -20,7 +20,7 @@ class TextDataset(Dataset):
 
 def create_dataset(text_file_path, vocab_path, block_size=128, batch_size=32):
     # Load or train tokenizer
-    tokenizer = SimpleTokenizer()
+    tokenizer = BPETokenizer()
     try:
         tokenizer.load_vocab(vocab_path)
         print(f"Loaded vocabulary from {vocab_path}")
