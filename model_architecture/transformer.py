@@ -14,23 +14,23 @@ class MultiHeadSelfAttention(nn.Module):
             self.head_dim * heads == embed_size
         ), "Embed size needs to be divisible by heads"
 
-        self.values = nn.Linear(self.head_dim, self.head_dim, bias=False)
-        self.keys = nn.Linear(self.head_dim, self.head_dim, bias=False)
-        self.queries = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.values = nn.Linear(self.embed_size, self.embed_size, bias=False)
+        self.keys = nn.Linear(self.embed_size, self.embed_size, bias=False)
+        self.queries = nn.Linear(self.embed_size, self.embed_size, bias=False)
         self.fc_out = nn.Linear(heads * self.head_dim, embed_size)
 
     def forward(self, values, keys, query, mask):
         N = query.shape[0]
         value_len, key_len, query_len = values.shape[1], keys.shape[1], query.shape[1]
 
-        # Split the embedding into self.heads pieces
-        values = values.reshape(N, value_len, self.heads, self.head_dim)
-        keys = keys.reshape(N, key_len, self.heads, self.head_dim)
-        query = query.reshape(N, query_len, self.heads, self.head_dim)
-
         values = self.values(values)
         keys = self.keys(keys)
         queries = self.queries(query)
+
+        # Split the embedding into self.heads pieces
+        values = values.reshape(N, value_len, self.heads, self.head_dim)
+        keys = keys.reshape(N, key_len, self.heads, self.head_dim)
+        queries = queries.reshape(N, query_len, self.heads, self.head_dim)
 
         # Einsum does matrix multiplication for query @ key.T
         # query shape: (N, query_len, heads, head_dim)
@@ -121,10 +121,12 @@ class ContextCompressor(nn.Module):
         # query: (N * num_chunks, 1, embed_size)
         query = self.compress_query.expand(N * num_chunks, 1, self.embed_size)
         
-        # We can use a simple attention or just mean pooling. 
-        # Let's use the last layer's output and pool it or use another attention block.
-        # For simplicity and effectiveness, let's use a small attention-based pooling:
-        compressed = torch.mean(out, dim=1, keepdim=True) # (N * num_chunks, 1, embed_size)
+        # Use simple attention mechanism for compression instead of mean pooling
+        # Compute dot product between query and the chunk's hidden states
+        attention_scores = torch.bmm(query, out.transpose(1, 2)) / (self.embed_size ** 0.5) # (N*num_chunks, 1, chunk_size)
+        attention_weights = torch.softmax(attention_scores, dim=-1) # (N*num_chunks, 1, chunk_size)
+
+        compressed = torch.bmm(attention_weights, out) # (N*num_chunks, 1, embed_size)
         
         # Reshape back to (N, num_chunks, embed_size)
         compressed = compressed.view(N, num_chunks, self.embed_size)
@@ -161,7 +163,7 @@ class Encoder(nn.Module):
             out = self.word_embedding(x)
             
         positions = torch.arange(0, seq_length).expand(N, seq_length).to(self.device)
-        out = self.dropout(out + self.position_embedding(positions[:seq_length]))
+        out = self.dropout(out + self.position_embedding(positions))
 
         for layer in self.layers:
             out = layer(out, out, out, mask)
