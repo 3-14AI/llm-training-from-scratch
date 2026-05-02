@@ -2,7 +2,7 @@
 import torch
 import torch.nn.functional as F
 from model_architecture.transformer import Transformer, CompressedTransformer
-from data_preparation.tokenizer import SimpleTokenizer
+from data_preparation.tokenizer import BPETokenizer
 import os
 import argparse
 
@@ -58,7 +58,7 @@ def main():
 
     # Load tokenizer
     vocab_file = "pretrain_vocab.pt"
-    tokenizer = SimpleTokenizer()
+    tokenizer = BPETokenizer()
     if os.path.exists(vocab_file):
         tokenizer.load_vocab(vocab_file)
         print(f"Loaded vocabulary from {vocab_file}")

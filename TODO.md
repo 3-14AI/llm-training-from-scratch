@@ -3,7 +3,7 @@
 This document contains actionable checklist items for advancing the training pipeline and overall project architecture. Each checkbox is sized appropriately for a single, focused pull request.
 
 ## Data & Tokenization
-- [ ] **Integrate BPE/SentencePiece Tokenizer**
+- [x] **Integrate BPE/SentencePiece Tokenizer**
   - **Description**: Replace the simplistic word-level tokenization in `data_preparation/tokenizer.py` with a standard subword tokenizer like BPE or SentencePiece (using `tokenizers` or `sentencepiece` library).
   - **Why**: Word-level tokenization leads to Out-Of-Vocabulary (OOV) errors and bloated vocabularies. Subword tokenization is standard practice for modern LLMs.
 
