@@ -65,7 +65,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/help - Показать это сообщение\n"
         "/prepare_dataset [ru] [en] [zh] - Подготовить датасет (аргументы: кол-во сэмплов для каждого языка)\n"
         "/list_experiments - Показать список доступных экспериментов\n"
-        "/run_experiment <exp_name> [mode] - Запустить эксперимент (mode: e2e или full, по умолчанию e2e)\n"
+        "/run_experiment <exp_name> [mode] [epochs] - Запустить эксперимент (mode: e2e/full, epochs: число)\n"
         "/status - Получить статус запущенных задач\n"
         "/get_log <task_id> - Получить лог задачи по ID\n"
         "/get_results <task_id> - Получить финальные результаты эксперимента по ID"
@@ -147,6 +147,7 @@ async def run_experiment_command(update: Update, context: ContextTypes.DEFAULT_T
 
     exp_name = context.args[0]
     mode = context.args[1] if len(context.args) > 1 else "e2e"
+    epochs = context.args[2] if len(context.args) > 2 else None
 
     if exp_name not in ALL_EXPERIMENTS:
         await update.message.reply_text(f"Эксперимент `{exp_name}` не найден в конфигурациях.")
@@ -168,6 +169,8 @@ async def run_experiment_command(update: Update, context: ContextTypes.DEFAULT_T
         "--vocab", str(REPO_ROOT / "multilingual_vocab.pt"),
         "--output", str(results_file_path),
     ]
+    if epochs:
+        command.extend(["--epochs", epochs])
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -188,7 +191,8 @@ async def run_experiment_command(update: Update, context: ContextTypes.DEFAULT_T
             "start_time": datetime.now(),
         }
         await update.message.reply_text(
-            f"Эксперимент `{exp_name}` (ID: `{task_id}`) запущен в режиме `{mode}`.\n" 
+            f"Эксперимент `{exp_name}` (ID: `{task_id}`) запущен.\n" 
+            f"Режим: `{mode}`" + (f", Эпох: `{epochs}`" if epochs else "") + "\n"
             f"Лог: `{log_file_path}`\n" 
             f"Результаты: `{results_file_path}`"
         )
@@ -261,12 +265,33 @@ async def get_results_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     with open(results_file, "r", encoding="utf-8") as f:
-        results_content = f.read()
+        results_data = json.load(f)
     
-    if len(results_content) > 4000:
-        await update.message.reply_document(results_file, caption=f"Результаты эксперимента `{task_id}`")
+    # Формируем красивый вывод результатов
+    if task_id in results_data:
+        res = results_data[task_id]
     else:
-        await update.message.reply_text(f"Результаты `{task_id}`:\n```json\n{results_content}\n```")
+        # Если в файле словарь с ключами-именами экспериментов
+        res = next(iter(results_data.values())) if results_data else None
+
+    if res and res.get("status") == "ok":
+        epoch_losses = res.get("epoch_losses", [])
+        losses_str = "\n".join([f"Epoch {i+1}: {loss:.4f}" for i, loss in enumerate(epoch_losses)])
+        message = (
+            f"📊 Результаты `{task_id}` ({res['exp_name']}):\n"
+            f"Статус: `OK`\n"
+            f"Параметры: {res['n_params']:,}\n"
+            f"Финальный Loss: {res['final_loss']:.4f}\n"
+            f"Время: {res['elapsed_seconds']} сек\n\n"
+            f"📈 Loss по эпохам:\n{losses_str}"
+        )
+        await update.message.reply_text(message)
+    else:
+        results_content = json.dumps(results_data, indent=2, ensure_ascii=False)
+        if len(results_content) > 4000:
+            await update.message.reply_document(results_file, caption=f"Результаты эксперимента `{task_id}`")
+        else:
+            await update.message.reply_text(f"Результаты `{task_id}`:\n```json\n{results_content}\n```")
 
 
 async def monitor_task_log(task_id: str) -> None:

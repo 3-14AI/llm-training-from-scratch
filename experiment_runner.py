@@ -88,6 +88,7 @@ def run_experiment(
     vocab_file: str,
     device: torch.device,
     mode: str = "e2e",
+    override_epochs: int = None,
 ) -> dict:
     """
     Запускает один эксперимент и возвращает словарь с результатами.
@@ -120,9 +121,8 @@ def run_experiment(
     criterion = nn.CrossEntropyLoss(ignore_index=0)
 
     max_batches = cfg.get("max_batches_per_epoch", None)
-    epochs = cfg["epochs"]
-
-    epoch_losses = []
+    epochs = override_epochs if override_epochs is not None else cfg["epochs"]
+    epoch_losses = []]
     for epoch in range(epochs):
         print(f"  Epoch {epoch+1}/{epochs} started...")
         loss = train_one_epoch(model, dataloader, optimizer, criterion, device, max_batches)
@@ -186,6 +186,10 @@ def main():
         "--log_file", type=str, default=None,
         help="Путь к файлу для записи логов (stdout/stderr)"
     )
+    parser.add_argument(
+        "--epochs", type=int, default=None,
+        help="Переопределить количество эпох обучения"
+    )
     args = parser.parse_args()
 
     # Перенаправляем stdout/stderr, если указан log_file
@@ -230,7 +234,7 @@ def main():
     for exp_name, cfg in configs.items():
         try:
             res = run_experiment(
-                exp_name, cfg, args.data, args.vocab, device, mode=args.mode
+                exp_name, cfg, args.data, args.vocab, device, mode=args.mode, override_epochs=args.epochs
             )
             results[exp_name] = res
         except Exception as exc:
