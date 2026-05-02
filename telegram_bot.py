@@ -88,7 +88,7 @@ async def prepare_dataset_command(update: Update, context: ContextTypes.DEFAULT_
     os.makedirs(REPO_ROOT / "logs", exist_ok=True)
     
     command = [
-        "python3", str(REPO_ROOT / "prepare_dataset.py"),
+        str(REPO_ROOT / "venv/bin/python3"), str(REPO_ROOT / "prepare_dataset.py"),
         "--ru", ru,
         "--en", en,
         "--zh", zh,
@@ -161,7 +161,7 @@ async def run_experiment_command(update: Update, context: ContextTypes.DEFAULT_T
     os.makedirs(REPO_ROOT / "results", exist_ok=True)
 
     command = [
-        "python3", str(REPO_ROOT / "experiment_runner.py"),
+        str(REPO_ROOT / "venv/bin/python3"), str(REPO_ROOT / "experiment_runner.py"),
         "--exp_name", exp_name,
         "--mode", mode,
         "--data", str(REPO_ROOT / "multilingual_corpus.txt"),
