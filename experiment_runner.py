@@ -190,6 +190,19 @@ def main():
         "--epochs", type=int, default=None,
         help="Переопределить количество эпох обучения"
     )
+    # Кастомные параметры модели
+    parser.add_argument("--embed_size", type=int, default=None)
+    parser.add_argument("--num_layers", type=int, default=None)
+    parser.add_argument("--heads", type=int, default=None)
+    parser.add_argument("--forward_expansion", type=int, default=4)
+    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--max_length", type=int, default=128)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--use_compression", action="store_true")
+    parser.add_argument("--chunk_size", type=int, default=8)
+    parser.add_argument("--compressor_layers", type=int, default=2)
+
     args = parser.parse_args()
 
     # Перенаправляем stdout/stderr, если указан log_file
@@ -210,21 +223,43 @@ def main():
         sys.exit(1)
 
     # Выбор конфигов
-    if args.mode == "e2e":
-        configs = get_e2e_configs()
+    if args.exp_name == "custom":
+        # Создаем кастомный конфиг из аргументов
+        configs = {
+            "custom": {
+                "series": 0,
+                "group": "custom",
+                "use_compression": args.use_compression,
+                "embed_size": args.embed_size or 128,
+                "num_layers": args.num_layers or 2,
+                "heads": args.heads or 4,
+                "forward_expansion": args.forward_expansion,
+                "dropout": args.dropout,
+                "max_length": args.max_length,
+                "block_size": args.max_length,
+                "batch_size": args.batch_size,
+                "lr": args.lr,
+                "epochs": args.epochs or 1,
+                "chunk_size": args.chunk_size,
+                "compressor_layers": args.compressor_layers,
+            }
+        }
     else:
-        configs = ALL_EXPERIMENTS
+        if args.mode == "e2e":
+            configs = get_e2e_configs()
+        else:
+            configs = ALL_EXPERIMENTS
 
-    # Фильтрация по сериям
-    if args.series:
-        configs = {k: v for k, v in configs.items() if v.get("series") in args.series}
+        # Фильтрация по сериям
+        if args.series:
+            configs = {k: v for k, v in configs.items() if v.get("series") in args.series}
 
-    # Фильтрация по имени эксперимента
-    if args.exp_name:
-        if args.exp_name not in configs:
-            print(f"Error: Experiment '{args.exp_name}' not found in selected configs.")
-            sys.exit(1)
-        configs = {args.exp_name: configs[args.exp_name]}
+        # Фильтрация по имени эксперимента
+        if args.exp_name:
+            if args.exp_name not in configs:
+                print(f"Error: Experiment '{args.exp_name}' not found in selected configs.")
+                sys.exit(1)
+            configs = {args.exp_name: configs[args.exp_name]}
 
     print(f"Total experiments to run: {len(configs)}\n")
 

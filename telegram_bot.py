@@ -68,7 +68,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/run_experiment <exp_name> [mode] [epochs] - Запустить эксперимент (mode: e2e/full, epochs: число)\n"
         "/status - Получить статус запущенных задач\n"
         "/get_log <task_id> - Получить лог задачи по ID\n"
-        "/get_results <task_id> - Получить финальные результаты эксперимента по ID"
+        "/get_results <task_id> - Получить финальные результаты эксперимента по ID\n"
+        "/run_custom <embed> <layers> <heads> [epochs] [batch] [lr] [compression: 0/1] - Запустить кастомный эксперимент"
     )
 
 
@@ -248,6 +249,83 @@ async def get_log_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 @restricted
+async def run_custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Запускает кастомный эксперимент с произвольными параметрами."""
+    global task_counter
+
+    if len(context.args) < 3:
+        await update.message.reply_text(
+            "Использование: `/run_custom <embed> <layers> <heads> [epochs] [batch] [lr] [compression: 0/1]`\n"
+            "Пример: `/run_custom 64 2 4 5 16 0.001 0`",
+            parse_mode="Markdown"
+        )
+        return
+
+    try:
+        embed = context.args[0]
+        layers = context.args[1]
+        heads = context.args[2]
+        epochs = context.args[3] if len(context.args) > 3 else "1"
+        batch = context.args[4] if len(context.args) > 4 else "32"
+        lr = context.args[5] if len(context.args) > 5 else "3e-4"
+        use_comp = context.args[6] if len(context.args) > 6 else "0"
+
+        task_counter += 1
+        task_id = f"custom_{task_counter}"
+        log_file_path = REPO_ROOT / f"logs/{task_id}.log"
+        results_file_path = REPO_ROOT / f"results/{task_id}_results.json"
+
+        os.makedirs(REPO_ROOT / "logs", exist_ok=True)
+        os.makedirs(REPO_ROOT / "results", exist_ok=True)
+
+        command = [
+            str(REPO_ROOT / "venv/bin/python3"), str(REPO_ROOT / "experiment_runner.py"),
+            "--exp_name", "custom",
+            "--embed_size", embed,
+            "--num_layers", layers,
+            "--heads", heads,
+            "--epochs", epochs,
+            "--batch_size", batch,
+            "--lr", lr,
+            "--data", str(REPO_ROOT / "multilingual_corpus.txt"),
+            "--vocab", str(REPO_ROOT / "multilingual_vocab.pt"),
+            "--output", str(results_file_path),
+        ]
+        if use_comp == "1":
+            command.append("--use_compression")
+
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=REPO_ROOT
+        )
+        
+        running_tasks[task_id] = {
+            "process": process,
+            "chat_id": update.effective_chat.id,
+            "status": "running",
+            "type": "custom_experiment",
+            "name": f"Custom (E={embed}, L={layers}, H={heads})",
+            "log_file": str(log_file_path),
+            "results_file": str(results_file_path),
+            "start_time": datetime.now(),
+        }
+
+        await update.message.reply_text(
+            f"🚀 Кастомный эксперимент (ID: `{task_id}`) запущен.\n"
+            f"Параметры: Embed={embed}, Layers={layers}, Heads={heads}, Epochs={epochs}, Batch={batch}, LR={lr}, Comp={use_comp}\n"
+            f"Лог: `{log_file_path}`",
+            parse_mode="Markdown"
+        )
+        asyncio.create_task(monitor_task_log(task_id))
+
+    except Exception as e:
+        logger.error(f"Ошибка при запуске кастомного эксперимента: {e}")
+        await update.message.reply_text(f"Ошибка: {e}")
+
+
+@restricted
 async def get_results_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отправляет финальные результаты эксперимента."""
     if not context.args:
@@ -353,6 +431,7 @@ def main() -> None:
     application.add_handler(CommandHandler("status", status_command))
     application.add_handler(CommandHandler("get_log", get_log_command))
     application.add_handler(CommandHandler("get_results", get_results_command))
+    application.add_handler(CommandHandler("run_custom", run_custom_command))
 
     logger.info("Бот запущен. Ожидание сообщений...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
