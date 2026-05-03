@@ -1,19 +1,3 @@
-"""
-run_e2e_tests.py
-================
-E2E тест-раннер для всех серий экспериментов.
-
-Режимы:
-  --mode e2e    — быстрый прогон на CPU (маленький чанк данных, 1 эпоха, 3 батча)
-  --mode full   — полный прогон (требует GPU ≥12 ГБ VRAM)
-
-Пример запуска e2e-теста:
-  python run_e2e_tests.py --mode e2e --data multilingual_corpus.txt
-
-Пример полного запуска:
-  python run_e2e_tests.py --mode full --data multilingual_corpus.txt
-"""
-
 import os
 import sys
 import json
@@ -30,43 +14,9 @@ from torch.optim import Adam
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from model_architecture.transformer import Transformer, CompressedTransformer
+from scripts.model_builder import build_model, count_params
 from data_preparation.dataset_creator import create_dataset
 from scripts.experiment_configs import ALL_EXPERIMENTS, get_e2e_configs
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Утилиты
-# ─────────────────────────────────────────────────────────────────────────────
-
-def count_params(model: nn.Module) -> int:
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-
-def build_model(cfg: dict, vocab_size: int, device: torch.device) -> nn.Module:
-    """Создаёт модель по конфигу."""
-    common = dict(
-        src_vocab_size=vocab_size,
-        trg_vocab_size=vocab_size,
-        src_pad_idx=0,
-        trg_pad_idx=0,
-        embed_size=cfg["embed_size"],
-        num_layers=cfg["num_layers"],
-        forward_expansion=cfg["forward_expansion"],
-        heads=cfg["heads"],
-        dropout=cfg["dropout"],
-        device=device,
-        max_length=cfg["max_length"],
-    )
-    if cfg["use_compression"]:
-        model = CompressedTransformer(
-            **common,
-            chunk_size=cfg["chunk_size"],
-            compressor_layers=cfg["compressor_layers"],
-        )
-    else:
-        model = Transformer(**common)
-    return model.to(device)
 
 
 def train_one_epoch(
@@ -103,10 +53,6 @@ def train_one_epoch(
     return total_loss / max(n_batches, 1)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Основная функция запуска одного эксперимента
-# ─────────────────────────────────────────────────────────────────────────────
-
 def run_experiment(
     exp_name: str,
     cfg: dict,
@@ -121,11 +67,11 @@ def run_experiment(
     print(f"\n{'─'*60}")
     print(f"Experiment : {exp_name}")
     print(f"Series     : {cfg.get('series', '?')}  |  Group: {cfg.get('group', '?')}")
-    print(f"Compression: {cfg['use_compression']}")
-    if cfg["use_compression"]:
-        print(f"  chunk_size={cfg['chunk_size']}, compressor_layers={cfg['compressor_layers']}")
+    print(f"Compression: {cfg.get('use_compression', False)}")
+    if cfg.get("use_compression", False):
+        print(f"  chunk_size={cfg.get('chunk_size', 8)}, compressor_layers={cfg.get('compressor_layers', 1)}")
     print(f"Model      : embed={cfg['embed_size']}, layers={cfg['num_layers']}, heads={cfg['heads']}")
-    print(f"Seq length : {cfg['block_size']}  |  batch={cfg['batch_size']}")
+    print(f"Seq length : {cfg.get('block_size', cfg.get('max_length', 64))}  |  batch={cfg.get('batch_size', 4)}")
     print(f"{'─'*60}")
 
     t0 = time.time()
@@ -133,8 +79,8 @@ def run_experiment(
     # Датасет
     dataloader, vocab_size = create_dataset(
         data_file, vocab_file,
-        block_size=cfg["block_size"],
-        batch_size=cfg["batch_size"],
+        block_size=cfg.get("block_size", cfg.get("max_length", 64)),
+        batch_size=cfg.get("batch_size", 4),
     )
 
     # Модель
@@ -142,11 +88,11 @@ def run_experiment(
     n_params = count_params(model)
     print(f"Parameters : {n_params:,}")
 
-    optimizer = Adam(model.parameters(), lr=cfg["lr"])
+    optimizer = Adam(model.parameters(), lr=cfg.get("lr", 0.001))
     criterion = nn.CrossEntropyLoss(ignore_index=0)
 
     max_batches = cfg.get("max_batches_per_epoch", None)
-    epochs = cfg["epochs"]
+    epochs = cfg.get("epochs", 1)
 
     epoch_losses = []
     for epoch in range(epochs):
@@ -155,17 +101,17 @@ def run_experiment(
         print(f"  Epoch {epoch+1}/{epochs}  loss={loss:.4f}")
 
     elapsed = time.time() - t0
-    final_loss = epoch_losses[-1]
+    final_loss = epoch_losses[-1] if epoch_losses else float('inf')
 
     result = {
         "exp_name": exp_name,
         "series": cfg.get("series"),
         "group": cfg.get("group"),
-        "use_compression": cfg["use_compression"],
+        "use_compression": cfg.get("use_compression", False),
         "embed_size": cfg["embed_size"],
         "num_layers": cfg["num_layers"],
         "heads": cfg["heads"],
-        "block_size": cfg["block_size"],
+        "block_size": cfg.get("block_size", cfg.get("max_length", 64)),
         "chunk_size": cfg.get("chunk_size"),
         "compressor_layers": cfg.get("compressor_layers"),
         "n_params": n_params,
@@ -177,10 +123,6 @@ def run_experiment(
     print(f"  Done in {elapsed:.1f}s  |  final_loss={final_loss:.4f}")
     return result
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Запуск всех экспериментов
-# ─────────────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="E2E experiment runner")

@@ -20,8 +20,9 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
+        pip install flake8 pytest pytest-asyncio pytest-cov toml
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test with pytest
       run: |
         PYTHONPATH=. pytest data_preparation/test_tokenizer.py
+        PYTHONPATH=. pytest scripts --cov=scripts --cov-fail-under=90

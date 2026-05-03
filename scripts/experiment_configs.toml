@@ -1,0 +1,423 @@
+[ALL_EXPERIMENTS.s1_small_baseline]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 128
+block_size = 128
+batch_size = 16
+epochs = 5
+lr = 0.0001
+use_compression = false
+series = 1
+group = "small"
+
+[ALL_EXPERIMENTS.s1_small_compressed]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 128
+block_size = 128
+batch_size = 16
+epochs = 5
+lr = 0.0001
+use_compression = true
+chunk_size = 8
+compressor_layers = 2
+series = 1
+group = "small"
+
+[ALL_EXPERIMENTS.s1_medium_baseline]
+embed_size = 512
+num_layers = 4
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 5e-5
+use_compression = false
+series = 1
+group = "medium"
+
+[ALL_EXPERIMENTS.s1_medium_compressed]
+embed_size = 512
+num_layers = 4
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 5e-5
+use_compression = true
+chunk_size = 16
+compressor_layers = 3
+series = 1
+group = "medium"
+
+[ALL_EXPERIMENTS.s1_large_baseline]
+embed_size = 768
+num_layers = 6
+heads = 12
+forward_expansion = 4
+dropout = 0.1
+max_length = 512
+block_size = 512
+batch_size = 4
+epochs = 3
+lr = 1e-5
+use_compression = false
+series = 1
+group = "large"
+
+[ALL_EXPERIMENTS.s1_large_compressed]
+embed_size = 768
+num_layers = 6
+heads = 12
+forward_expansion = 4
+dropout = 0.1
+max_length = 512
+block_size = 512
+batch_size = 4
+epochs = 3
+lr = 1e-5
+use_compression = true
+chunk_size = 32
+compressor_layers = 4
+series = 1
+group = "large"
+
+[ALL_EXPERIMENTS.s2_medium_baseline]
+embed_size = 512
+num_layers = 4
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 5e-5
+use_compression = false
+series = 2
+group = "comp_baseline"
+
+[ALL_EXPERIMENTS.s2_comp_layers_1]
+embed_size = 512
+num_layers = 4
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 5e-5
+use_compression = true
+chunk_size = 16
+compressor_layers = 1
+series = 2
+group = "comp_layers_1"
+
+[ALL_EXPERIMENTS.s2_comp_layers_2]
+embed_size = 512
+num_layers = 4
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 5e-5
+use_compression = true
+chunk_size = 16
+compressor_layers = 2
+series = 2
+group = "comp_layers_2"
+
+[ALL_EXPERIMENTS.s2_comp_layers_3]
+embed_size = 512
+num_layers = 4
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 5e-5
+use_compression = true
+chunk_size = 16
+compressor_layers = 3
+series = 2
+group = "comp_layers_3"
+
+[ALL_EXPERIMENTS.s2_comp_layers_4]
+embed_size = 512
+num_layers = 4
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 5e-5
+use_compression = true
+chunk_size = 16
+compressor_layers = 4
+series = 2
+group = "comp_layers_4"
+
+[ALL_EXPERIMENTS.s2_comp_layers_6]
+embed_size = 512
+num_layers = 4
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 5e-5
+use_compression = true
+chunk_size = 16
+compressor_layers = 6
+series = 2
+group = "comp_layers_6"
+
+[ALL_EXPERIMENTS.s3_seq64_baseline]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 64
+block_size = 64
+batch_size = 16
+epochs = 5
+lr = 0.0001
+use_compression = false
+series = 3
+group = "seq64"
+
+[ALL_EXPERIMENTS.s3_seq64_compressed]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 64
+block_size = 64
+batch_size = 16
+epochs = 5
+lr = 0.0001
+use_compression = true
+chunk_size = 8
+compressor_layers = 2
+series = 3
+group = "seq64"
+
+[ALL_EXPERIMENTS.s3_seq128_baseline]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 128
+block_size = 128
+batch_size = 16
+epochs = 5
+lr = 0.0001
+use_compression = false
+series = 3
+group = "seq128"
+
+[ALL_EXPERIMENTS.s3_seq128_compressed]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 128
+block_size = 128
+batch_size = 16
+epochs = 5
+lr = 0.0001
+use_compression = true
+chunk_size = 16
+compressor_layers = 2
+series = 3
+group = "seq128"
+
+[ALL_EXPERIMENTS.s3_seq256_baseline]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 0.0001
+use_compression = false
+series = 3
+group = "seq256"
+
+[ALL_EXPERIMENTS.s3_seq256_compressed]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 256
+block_size = 256
+batch_size = 8
+epochs = 5
+lr = 0.0001
+use_compression = true
+chunk_size = 32
+compressor_layers = 2
+series = 3
+group = "seq256"
+
+[ALL_EXPERIMENTS.s3_seq512_baseline]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 512
+block_size = 512
+batch_size = 4
+epochs = 5
+lr = 0.0001
+use_compression = false
+series = 3
+group = "seq512"
+
+[ALL_EXPERIMENTS.s3_seq512_compressed]
+embed_size = 256
+num_layers = 2
+heads = 8
+forward_expansion = 4
+dropout = 0.1
+max_length = 512
+block_size = 512
+batch_size = 4
+epochs = 5
+lr = 0.0001
+use_compression = true
+chunk_size = 64
+compressor_layers = 2
+series = 3
+group = "seq512"
+
+[RUN_EXPERIMENTS]
+
+[RUN_EXPERIMENTS.small_baseline]
+embed_size = 64
+num_layers = 2
+heads = 4
+use_compression = false
+max_length = 64
+
+[RUN_EXPERIMENTS.small_compressed]
+embed_size = 64
+num_layers = 2
+heads = 4
+use_compression = true
+chunk_size = 8
+compressor_layers = 1
+max_length = 64
+
+[RUN_EXPERIMENTS.medium_baseline]
+embed_size = 128
+num_layers = 3
+heads = 4
+use_compression = false
+max_length = 64
+
+[RUN_EXPERIMENTS.medium_compressed]
+embed_size = 128
+num_layers = 3
+heads = 4
+use_compression = true
+chunk_size = 8
+compressor_layers = 2
+max_length = 64
+
+[RUN_EXPERIMENTS.large_baseline]
+embed_size = 256
+num_layers = 4
+heads = 8
+use_compression = false
+max_length = 64
+
+[RUN_EXPERIMENTS.large_compressed]
+embed_size = 256
+num_layers = 4
+heads = 8
+use_compression = true
+chunk_size = 8
+compressor_layers = 2
+max_length = 64
+
+[RUN_EXPERIMENTS.medium_comp_small]
+embed_size = 128
+num_layers = 3
+heads = 4
+use_compression = true
+chunk_size = 8
+compressor_layers = 1
+max_length = 64
+
+[RUN_EXPERIMENTS.medium_comp_large]
+embed_size = 128
+num_layers = 3
+heads = 4
+use_compression = true
+chunk_size = 8
+compressor_layers = 4
+max_length = 64
+
+[RUN_EXPERIMENTS.seq_128_baseline]
+embed_size = 64
+num_layers = 2
+heads = 4
+use_compression = false
+max_length = 128
+
+[RUN_EXPERIMENTS.seq_128_compressed]
+embed_size = 64
+num_layers = 2
+heads = 4
+use_compression = true
+chunk_size = 16
+compressor_layers = 1
+max_length = 128
+
+[RUN_EXPERIMENTS.seq_256_baseline]
+embed_size = 64
+num_layers = 2
+heads = 4
+use_compression = false
+max_length = 256
+
+[RUN_EXPERIMENTS.seq_256_compressed]
+embed_size = 64
+num_layers = 2
+heads = 4
+use_compression = true
+chunk_size = 32
+compressor_layers = 1
+max_length = 256
