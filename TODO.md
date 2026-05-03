@@ -8,7 +8,7 @@ This document contains actionable checklist items for advancing the training pip
   - **Why**: Word-level tokenization leads to Out-Of-Vocabulary (OOV) errors and bloated vocabularies. Subword tokenization is standard practice for modern LLMs.
 
 ## Evaluation & Monitoring
-- [ ] **Implement Validation & Evaluation Metrics**
+- [x] **Implement Validation & Evaluation Metrics**
   - **Description**: Extend `pretrain.py` and `finetune.py` to support a held-out validation set. Log validation loss and perplexity at fixed steps using the existing Weights & Biases integration.
   - **Why**: Currently, the models only log training loss. We need validation metrics to prevent overfitting and properly compare experiment configurations.
 
