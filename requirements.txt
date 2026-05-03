@@ -11,3 +11,5 @@ torchaudio>=0.10.0
 datasets
 python-telegram-bot
 tokenizers
+lm-eval
+transformers
