@@ -13,3 +13,4 @@ python-telegram-bot
 tokenizers
 lm-eval
 transformers
+pytest-asyncio
