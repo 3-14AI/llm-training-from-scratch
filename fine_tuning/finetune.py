@@ -7,6 +7,10 @@ from model_architecture.transformer import Transformer
 from data_preparation.dataset_creator import create_dataset
 import os
 
+from monitoring.train_monitor import init_wandb, log_metrics, finish_wandb
+from monitoring.evaluation import evaluate_model
+
+
 # LoRA implementation (simplified for demonstration)
 class LoRALayer(nn.Module):
     def __init__(self, in_features, out_features, rank=8, alpha=16):
@@ -40,8 +44,7 @@ def inject_lora(model, rank=8, alpha=16):
             # module.add_module("lora_layer", LoRALayer(module.in_features, module.out_features, rank, alpha))
     return model
 
-def train_model(model, dataloader, optimizer, criterion, device, epochs=10, use_lora=False):
-    model.train()
+def train_model(model, dataloader, optimizer, criterion, device, epochs=10, use_lora=False, val_dataloader=None, eval_steps=100):
     if use_lora:
         print("Fine-tuning with LoRA enabled.")
         # In a real LoRA setup, only LoRA parameters would be trainable
@@ -49,6 +52,7 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, use_
         # by freezing base model parameters and enabling LoRA parameters.
 
     for epoch in range(epochs):
+        model.train()
         total_loss = 0
         for batch_idx, (src, trg) in enumerate(dataloader):
             src, trg = src.to(device), trg.to(device)
@@ -67,8 +71,24 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, use_
 
             if batch_idx % 100 == 0:
                 print(f"Epoch {epoch+1}, Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
+                log_metrics({"train/loss": loss.item(), "train/epoch": epoch + 1, "train/step": epoch * len(dataloader) + batch_idx})
+
+            if val_dataloader is not None and batch_idx > 0 and batch_idx % eval_steps == 0:
+                val_loss, val_perplexity = evaluate_model(model, val_dataloader, criterion, device)
+                print(f"Validation - Epoch {epoch+1}, Step {batch_idx}, Loss: {val_loss:.4f}, Perplexity: {val_perplexity:.4f}")
+                log_metrics({"val/loss": val_loss, "val/perplexity": val_perplexity, "val/epoch": epoch + 1, "val/step": epoch * len(dataloader) + batch_idx})
+                model.train() # Set back to train mode
         
-        print(f"Epoch {epoch+1} finished, Average Loss: {total_loss / len(dataloader):.4f}")
+        avg_loss = total_loss / len(dataloader)
+        print(f"Epoch {epoch+1} finished, Average Loss: {avg_loss:.4f}")
+        log_metrics({"train/avg_loss": avg_loss, "train/epoch": epoch + 1})
+
+        # Evaluate at the end of each epoch
+        if val_dataloader is not None:
+            val_loss, val_perplexity = evaluate_model(model, val_dataloader, criterion, device)
+            print(f"End of Epoch Validation - Epoch {epoch+1}, Loss: {val_loss:.4f}, Perplexity: {val_perplexity:.4f}")
+            log_metrics({"val/epoch_loss": val_loss, "val/epoch_perplexity": val_perplexity, "val/epoch": epoch + 1})
+            model.train()
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -79,10 +99,15 @@ def main():
     with open("dummy_finetune_data.txt", "w", encoding="utf-8") as f:
         f.write(dummy_text)
 
+    dummy_val_text = "This is a sample text for fine-tuning validation. " * 100
+    with open("dummy_val_finetune_data.txt", "w", encoding="utf-8") as f:
+        f.write(dummy_val_text)
+
     vocab_file = "finetune_vocab.pt"
     block_size = 128
     batch_size = 16
     dataloader, vocab_size = create_dataset("dummy_finetune_data.txt", vocab_file, block_size, batch_size)
+    val_dataloader, _ = create_dataset("dummy_val_finetune_data.txt", vocab_file, block_size, batch_size)
 
     # Model parameters (should match pre-trained model)
     src_vocab_size = vocab_size
@@ -116,9 +141,24 @@ def main():
     optimizer = Adam(model.parameters(), lr=0.00001) # Smaller learning rate for fine-tuning
     criterion = nn.CrossEntropyLoss(ignore_index=trg_pad_idx)
 
+    # Init WandB
+    config = {
+        "learning_rate": 0.00001,
+        "epochs": 3,
+        "batch_size": batch_size,
+        "block_size": block_size,
+        "embed_size": embed_size,
+        "num_layers": num_layers,
+        "heads": heads,
+        "use_lora": use_lora,
+    }
+    init_wandb("llm-finetuning", "finetune-run", config)
+
     print("Starting fine-tuning...")
-    train_model(model, dataloader, optimizer, criterion, device, epochs=3, use_lora=use_lora)
+    train_model(model, dataloader, optimizer, criterion, device, epochs=3, use_lora=use_lora, val_dataloader=val_dataloader, eval_steps=100)
     print("Fine-tuning finished.")
+
+    finish_wandb()
 
     # Save the fine-tuned model
     torch.save(model.state_dict(), "finetuned_llm.pth")
@@ -126,6 +166,7 @@ def main():
 
     # Clean up dummy data
     os.remove("dummy_finetune_data.txt")
+    os.remove("dummy_val_finetune_data.txt")
     os.remove("finetune_vocab.pt")
 
 if __name__ == '__main__':
