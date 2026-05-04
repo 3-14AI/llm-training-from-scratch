@@ -12,7 +12,7 @@ This document contains actionable checklist items for advancing the training pip
   - **Description**: Extend `pretrain.py` and `finetune.py` to support a held-out validation set. Log validation loss and perplexity at fixed steps using the existing Weights & Biases integration.
   - **Why**: Currently, the models only log training loss. We need validation metrics to prevent overfitting and properly compare experiment configurations.
 
-- [ ] **Integrate LM Evaluation Harness**
+- [x] **Integrate LM Evaluation Harness**
   - **Description**: Add a script to interface the generated models (via `generate.py` or standard HuggingFace wrappers) with EleutherAI's LM Evaluation Harness for zero-shot testing on standard benchmarks (e.g., MMLU, HellaSwag).
   - **Why**: Standardized benchmarking is required to assess model quality and measure real progress.
 
