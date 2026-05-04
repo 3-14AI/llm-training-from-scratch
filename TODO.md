@@ -17,7 +17,7 @@ This document contains actionable checklist items for advancing the training pip
   - **Why**: Standardized benchmarking is required to assess model quality and measure real progress.
 
 ## Distributed Training & Scaling
-- [ ] **Implement Multi-GPU Training via DeepSpeed/FSDP**
+- [x] **Implement Multi-GPU Training via DeepSpeed/FSDP**
   - **Description**: Wrap the training loop in `pretrain.py` with DeepSpeed (`deepspeed.initialize`) or PyTorch FSDP. Ensure data loading uses `DistributedSampler`.
   - **Why**: Training large configurations (as in `configs/large_config.py`) requires multi-GPU scaling due to VRAM limitations on single GPUs.
 

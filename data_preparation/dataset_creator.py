@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from data_preparation.tokenizer import BPETokenizer
 from typing import List, Tuple, Any
 
@@ -45,7 +46,7 @@ class TextDataset(Dataset):
         y = torch.tensor(chunk[1:], dtype=torch.long)
         return x, y
 
-def create_dataset(text_file_path: str, vocab_path: str, block_size: int = 128, batch_size: int = 32) -> Tuple[DataLoader, int]:
+def create_dataset(text_file_path: str, vocab_path: str, block_size: int = 128, batch_size: int = 32, is_distributed: bool = False) -> Tuple[DataLoader, int]:
     """
     Создает DataLoader и возвращает размер словаря токенизатора для заданного текстового файла.
     Если словарь по пути vocab_path не найден, обучает новый токенизатор и сохраняет его.
@@ -55,6 +56,7 @@ def create_dataset(text_file_path: str, vocab_path: str, block_size: int = 128, 
         vocab_path (str): Путь к файлу словаря (для сохранения/загрузки).
         block_size (int, optional): Размер обучающего блока (по умолчанию 128).
         batch_size (int, optional): Размер батча (по умолчанию 32).
+        is_distributed (bool, optional): Использовать ли DistributedSampler для распределенного обучения (по умолчанию False).
 
     Возвращает:
         Tuple[DataLoader, int]: Кортеж, содержащий DataLoader и размер словаря.
@@ -85,5 +87,10 @@ def create_dataset(text_file_path: str, vocab_path: str, block_size: int = 128, 
         tokenized_text = tokenized_text + [0] * (block_size + 1 - len(tokenized_text))
         dataset = TextDataset(tokenized_text, block_size)
 
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    if is_distributed:
+        sampler = DistributedSampler(dataset)
+        dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler, shuffle=False)
+    else:
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
     return dataloader, tokenizer.current_id
