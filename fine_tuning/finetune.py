@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from model_architecture.transformer import Transformer
 from data_preparation.dataset_creator import create_dataset
 import os
+import argparse
 
 from monitoring.train_monitor import init_wandb, log_metrics, finish_wandb
 from monitoring.evaluation import evaluate_model
@@ -44,14 +45,16 @@ def inject_lora(model, rank=8, alpha=16):
             # module.add_module("lora_layer", LoRALayer(module.in_features, module.out_features, rank, alpha))
     return model
 
-def train_model(model, dataloader, optimizer, criterion, device, epochs=10, use_lora=False, val_dataloader=None, eval_steps=100):
+def train_model(model, dataloader, optimizer, criterion, device, scheduler=None, epochs=10, start_epoch=0, global_step=0, use_lora=False, val_dataloader=None, eval_steps=100, checkpoint_dir="checkpoints_finetune"):
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
     if use_lora:
         print("Fine-tuning with LoRA enabled.")
         # In a real LoRA setup, only LoRA parameters would be trainable
         # For this simplified example, we'll assume the model is already prepared for LoRA training
         # by freezing base model parameters and enabling LoRA parameters.
 
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         model.train()
         total_loss = 0
         for batch_idx, (src, trg) in enumerate(dataloader):
@@ -68,6 +71,7 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, use_
             optimizer.step()
 
             total_loss += loss.item()
+            global_step += 1
 
             if batch_idx % 100 == 0:
                 print(f"Epoch {epoch+1}, Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
@@ -83,6 +87,9 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, use_
         print(f"Epoch {epoch+1} finished, Average Loss: {avg_loss:.4f}")
         log_metrics({"train/avg_loss": avg_loss, "train/epoch": epoch + 1})
 
+        if scheduler is not None:
+            scheduler.step()
+
         # Evaluate at the end of each epoch
         if val_dataloader is not None:
             val_loss, val_perplexity = evaluate_model(model, val_dataloader, criterion, device)
@@ -90,7 +97,24 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, use_
             log_metrics({"val/epoch_loss": val_loss, "val/epoch_perplexity": val_perplexity, "val/epoch": epoch + 1})
             model.train()
 
+        # Save Checkpoint
+        checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_finetune_epoch_{epoch+1}.pt")
+        checkpoint = {
+            'epoch': epoch + 1,
+            'global_step': global_step,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
+        }
+        torch.save(checkpoint, checkpoint_path)
+        print(f"Saved checkpoint to {checkpoint_path}")
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Fine-tune the LLM.")
+    parser.add_argument("--resume_from", type=str, default=None, help="Path to checkpoint to resume from")
+    args, unknown = parser.parse_known_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -139,7 +163,23 @@ def main():
         # Freeze base model parameters and unfreeze LoRA parameters here for actual LoRA training.
 
     optimizer = Adam(model.parameters(), lr=0.00001) # Smaller learning rate for fine-tuning
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
     criterion = nn.CrossEntropyLoss(ignore_index=trg_pad_idx)
+
+    start_epoch = 0
+    global_step = 0
+    if args.resume_from is not None:
+        if os.path.exists(args.resume_from):
+            print(f"Resuming from checkpoint {args.resume_from}")
+            checkpoint = torch.load(args.resume_from, map_location=device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if checkpoint.get('scheduler_state_dict') and scheduler:
+                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint.get('epoch', 0)
+            global_step = checkpoint.get('global_step', 0)
+        else:
+            print(f"Checkpoint {args.resume_from} not found. Starting from scratch.")
 
     # Init WandB
     config = {
@@ -155,7 +195,7 @@ def main():
     init_wandb("llm-finetuning", "finetune-run", config)
 
     print("Starting fine-tuning...")
-    train_model(model, dataloader, optimizer, criterion, device, epochs=3, use_lora=use_lora, val_dataloader=val_dataloader, eval_steps=100)
+    train_model(model, dataloader, optimizer, criterion, device, scheduler=scheduler, epochs=3, start_epoch=start_epoch, global_step=global_step, use_lora=use_lora, val_dataloader=val_dataloader, eval_steps=100)
     print("Fine-tuning finished.")
 
     finish_wandb()

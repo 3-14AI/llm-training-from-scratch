@@ -22,6 +22,6 @@ This document contains actionable checklist items for advancing the training pip
   - **Why**: Training large configurations (as in `configs/large_config.py`) requires multi-GPU scaling due to VRAM limitations on single GPUs.
 
 ## Checkpointing & State Management
-- [ ] **Enhance Checkpointing Mechanism**
+- [x] **Enhance Checkpointing Mechanism**
   - **Description**: Update the training scripts to save not just model weights (`model.state_dict()`), but also the optimizer state, learning rate scheduler state, current epoch, and global step.
   - **Why**: In case of failures or resource preemption (especially in cloud environments), robust checkpointing allows resuming training without losing progress.

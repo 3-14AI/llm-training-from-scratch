@@ -12,8 +12,10 @@ from monitoring.train_monitor import init_wandb, log_metrics, finish_wandb
 from monitoring.evaluation import evaluate_model
 
 
-def train_model(model, dataloader, optimizer, criterion, device, epochs=10, val_dataloader=None, eval_steps=100, is_deepspeed=False):
-    for epoch in range(epochs):
+def train_model(model, dataloader, optimizer, criterion, device, scheduler=None, epochs=10, start_epoch=0, global_step=0, val_dataloader=None, eval_steps=100, is_deepspeed=False, checkpoint_dir="checkpoints"):
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    for epoch in range(start_epoch, epochs):
         model.train()
         total_loss = 0
 
@@ -43,6 +45,7 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, val_
                 optimizer.step()
 
             total_loss += loss.item()
+            global_step += 1
 
             if batch_idx % 100 == 0:
                 print(f"Epoch {epoch+1}, Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
@@ -58,12 +61,30 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, val_
         print(f"Epoch {epoch+1} finished, Average Loss: {avg_loss:.4f}")
         log_metrics({"train/avg_loss": avg_loss, "train/epoch": epoch + 1})
         
+        if scheduler is not None:
+            scheduler.step()
+
         # Evaluate at the end of each epoch as well
         if val_dataloader is not None:
             val_loss, val_perplexity = evaluate_model(model, val_dataloader, criterion, device)
             print(f"End of Epoch Validation - Epoch {epoch+1}, Loss: {val_loss:.4f}, Perplexity: {val_perplexity:.4f}")
             log_metrics({"val/epoch_loss": val_loss, "val/epoch_perplexity": val_perplexity, "val/epoch": epoch + 1})
             model.train()
+
+        # Save Checkpoint
+        if not is_deepspeed or (hasattr(model, 'module') and deepspeed.comm.get_rank() == 0) or (not hasattr(model, 'module')):
+            checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pt")
+            state_dict = model.module.state_dict() if is_deepspeed and hasattr(model, 'module') else model.state_dict()
+            checkpoint = {
+                'epoch': epoch + 1,
+                'global_step': global_step,
+                'model_state_dict': state_dict,
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
+            }
+            torch.save(checkpoint, checkpoint_path)
+            print(f"Saved checkpoint to {checkpoint_path}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Pre-train the LLM with optional context compression.")
@@ -75,6 +96,7 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1, help="local rank passed from distributed launcher")
     parser.add_argument("--deepspeed", action="store_true", help="Enable DeepSpeed training")
     parser.add_argument("--deepspeed_config", type=str, default="ds_config.json", help="DeepSpeed config file")
+    parser.add_argument("--resume_from", type=str, default=None, help="Path to checkpoint to resume from")
 
     # Optional deepspeed args parsing natively
     args, unknown = parser.parse_known_args()
@@ -131,7 +153,23 @@ def main():
         ).to(device)
 
     optimizer = Adam(model.parameters(), lr=0.0001)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
     criterion = nn.CrossEntropyLoss(ignore_index=trg_pad_idx)
+
+    start_epoch = 0
+    global_step = 0
+    if args.resume_from is not None:
+        if os.path.exists(args.resume_from):
+            print(f"Resuming from checkpoint {args.resume_from}")
+            checkpoint = torch.load(args.resume_from, map_location=device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if checkpoint.get('scheduler_state_dict') and scheduler:
+                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint.get('epoch', 0)
+            global_step = checkpoint.get('global_step', 0)
+        else:
+            print(f"Checkpoint {args.resume_from} not found. Starting from scratch.")
 
     if is_deepspeed:
         model, optimizer, _, _ = deepspeed.initialize(
@@ -159,7 +197,7 @@ def main():
     init_wandb("llm-pretraining", "pretrain-run", config)
 
     print("Starting pre-training...")
-    train_model(model, dataloader, optimizer, criterion, device, epochs=5, val_dataloader=val_dataloader, eval_steps=100, is_deepspeed=is_deepspeed)
+    train_model(model, dataloader, optimizer, criterion, device, scheduler=scheduler, epochs=5, start_epoch=start_epoch, global_step=global_step, val_dataloader=val_dataloader, eval_steps=100, is_deepspeed=is_deepspeed)
     print("Pre-training finished.")
 
     finish_wandb()
