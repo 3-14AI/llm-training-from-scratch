@@ -7,18 +7,26 @@ from model_architecture.transformer import Transformer, CompressedTransformer
 from data_preparation.dataset_creator import create_dataset
 import os
 import argparse
+import deepspeed
 from monitoring.train_monitor import init_wandb, log_metrics, finish_wandb
 from monitoring.evaluation import evaluate_model
 
 
-def train_model(model, dataloader, optimizer, criterion, device, epochs=10, val_dataloader=None, eval_steps=100):
+def train_model(model, dataloader, optimizer, criterion, device, epochs=10, val_dataloader=None, eval_steps=100, is_deepspeed=False):
     for epoch in range(epochs):
         model.train()
         total_loss = 0
+
+        # If using DistributedSampler, we need to set the epoch
+        if hasattr(dataloader, 'sampler') and hasattr(dataloader.sampler, 'set_epoch'):
+            dataloader.sampler.set_epoch(epoch)
+
         for batch_idx, (src, trg) in enumerate(dataloader):
             src, trg = src.to(device), trg.to(device)
 
-            optimizer.zero_grad()
+            if not is_deepspeed:
+                optimizer.zero_grad()
+
             output = model(src, trg[:, :-1])
             
             # Reshape for loss calculation
@@ -26,8 +34,13 @@ def train_model(model, dataloader, optimizer, criterion, device, epochs=10, val_
             trg = trg[:, 1:].reshape(-1)
 
             loss = criterion(output, trg)
-            loss.backward()
-            optimizer.step()
+
+            if is_deepspeed:
+                model.backward(loss)
+                model.step()
+            else:
+                loss.backward()
+                optimizer.step()
 
             total_loss += loss.item()
 
@@ -57,10 +70,24 @@ def main():
     parser.add_argument("--use_compression", action="store_true", help="Use context compression transformer")
     parser.add_argument("--chunk_size", type=int, default=8, help="Size of context chunks to compress")
     parser.add_argument("--compressor_layers", type=int, default=2, help="Number of layers in the compressor")
-    args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    # DeepSpeed args
+    parser.add_argument("--local_rank", type=int, default=-1, help="local rank passed from distributed launcher")
+    parser.add_argument("--deepspeed", action="store_true", help="Enable DeepSpeed training")
+    parser.add_argument("--deepspeed_config", type=str, default="ds_config.json", help="DeepSpeed config file")
+
+    # Optional deepspeed args parsing natively
+    args, unknown = parser.parse_known_args()
+
+    is_deepspeed = args.deepspeed
+
+    if is_deepspeed:
+        deepspeed.init_distributed()
+        device = torch.device(f"cuda:{args.local_rank}" if torch.cuda.is_available() else "cpu")
+        print(f"DeepSpeed initialized on device: {device}, local_rank: {args.local_rank}")
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using device: {device}")
 
     # Dummy data creation for demonstration
     dummy_text = "This is a sample text for pre-training the LLM. It should be a large corpus of text data. " * 1000
@@ -74,8 +101,8 @@ def main():
     vocab_file = "pretrain_vocab.pt"
     block_size = 128
     batch_size = 16
-    dataloader, vocab_size = create_dataset("dummy_pretrain_data.txt", vocab_file, block_size, batch_size)
-    val_dataloader, _ = create_dataset("dummy_val_data.txt", vocab_file, block_size, batch_size)
+    dataloader, vocab_size = create_dataset("dummy_pretrain_data.txt", vocab_file, block_size, batch_size, is_distributed=is_deepspeed)
+    val_dataloader, _ = create_dataset("dummy_val_data.txt", vocab_file, block_size, batch_size, is_distributed=is_deepspeed)
 
     # Model parameters
     src_vocab_size = vocab_size
@@ -106,6 +133,15 @@ def main():
     optimizer = Adam(model.parameters(), lr=0.0001)
     criterion = nn.CrossEntropyLoss(ignore_index=trg_pad_idx)
 
+    if is_deepspeed:
+        model, optimizer, _, _ = deepspeed.initialize(
+            args=args,
+            model=model,
+            optimizer=optimizer,
+            model_parameters=model.parameters(),
+            config=args.deepspeed_config if args.deepspeed_config else None
+        )
+
     # Init WandB
     config = {
         "learning_rate": 0.0001,
@@ -123,15 +159,19 @@ def main():
     init_wandb("llm-pretraining", "pretrain-run", config)
 
     print("Starting pre-training...")
-    train_model(model, dataloader, optimizer, criterion, device, epochs=5, val_dataloader=val_dataloader, eval_steps=100)
+    train_model(model, dataloader, optimizer, criterion, device, epochs=5, val_dataloader=val_dataloader, eval_steps=100, is_deepspeed=is_deepspeed)
     print("Pre-training finished.")
 
     finish_wandb()
 
     # Save the pre-trained model
-    save_path = "pretrained_llm_compressed.pth" if args.use_compression else "pretrained_llm.pth"
-    torch.save(model.state_dict(), save_path)
-    print(f"Pre-trained model saved to {save_path}")
+    if not is_deepspeed or args.local_rank <= 0:
+        save_path = "pretrained_llm_compressed.pth" if args.use_compression else "pretrained_llm.pth"
+
+        # When using deepspeed, model might be DeepSpeedEngine, use module.state_dict() if so
+        state_dict = model.module.state_dict() if is_deepspeed and hasattr(model, 'module') else model.state_dict()
+        torch.save(state_dict, save_path)
+        print(f"Pre-trained model saved to {save_path}")
 
     # Clean up dummy data
     os.remove("dummy_pretrain_data.txt")
