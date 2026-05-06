@@ -1,27 +1,37 @@
-# Training Pipeline & Architecture Checklist
+# План переработки Telegram бота в Telegram Web App (Mini App)
 
-This document contains actionable checklist items for advancing the training pipeline and overall project architecture. Each checkbox is sized appropriately for a single, focused pull request.
+## Шаг 1: Подготовка архитектуры и базового Web App
+- [ ] **Выбор и настройка стека технологий:**
+  - Развернуть frontend-приложение (например, React, Vue или HTML/JS) для пользовательского интерфейса.
+  - Создать backend-сервер (например, FastAPI или Flask) для обработки запросов от Web App и управления процессами на сервере.
+- [ ] **Интеграция с Telegram:**
+  - Подключить Telegram Web Apps API (`telegram-web-app.js`) к frontend.
+  - Обновить `scripts/telegram_bot.py`: добавить кнопку (Menu Button или Inline-кнопку) для открытия Web App внутри Telegram.
 
-## Data & Tokenization
-- [x] **Integrate BPE/SentencePiece Tokenizer**
-  - **Description**: Replace the simplistic word-level tokenization in `data_preparation/tokenizer.py` with a standard subword tokenizer like BPE or SentencePiece (using `tokenizers` or `sentencepiece` library).
-  - **Why**: Word-level tokenization leads to Out-Of-Vocabulary (OOV) errors and bloated vocabularies. Subword tokenization is standard practice for modern LLMs.
+## Шаг 2: Интерфейс для запуска скриптов и shell-команд
+- [ ] **Управление shell-командами:**
+  - Добавить защищенный API-эндпоинт на бэкенде для выполнения разрешенных shell-команд.
+  - Сделать UI-компонент с терминалом для выполнения команд и отображения вывода (stdout/stderr).
+- [ ] **Запуск скриптов обучения через UI:**
+  - Создать дашборд с кнопками для запуска процессов (Pretraining, Fine-tuning, Evaluation) вместо текущих текстовых команд.
+  - Настроить передачу логов обучения в реальном времени (например, через WebSockets), чтобы видеть прогресс прямо в интерфейсе мини-приложения.
 
-## Evaluation & Monitoring
-- [x] **Implement Validation & Evaluation Metrics**
-  - **Description**: Extend `pretrain.py` and `finetune.py` to support a held-out validation set. Log validation loss and perplexity at fixed steps using the existing Weights & Biases integration.
-  - **Why**: Currently, the models only log training loss. We need validation metrics to prevent overfitting and properly compare experiment configurations.
+## Шаг 3: Управление конфигурациями (Quick Launch)
+- [ ] **Создание и редактирование конфигов:**
+  - Разработать форму для настройки параметров обучения (размер батча, learning rate, количество эпох и т.д.).
+  - Реализовать сохранение новых конфигов в `experiment_configs.toml` или директорию `configs/` через API.
+- [ ] **Быстрый запуск:**
+  - Добавить выпадающий список (dropdown) существующих конфигураций для быстрого старта обучения одним кликом.
 
-- [x] **Integrate LM Evaluation Harness**
-  - **Description**: Add a script to interface the generated models (via `generate.py` or standard HuggingFace wrappers) with EleutherAI's LM Evaluation Harness for zero-shot testing on standard benchmarks (e.g., MMLU, HellaSwag).
-  - **Why**: Standardized benchmarking is required to assess model quality and measure real progress.
+## Шаг 4: Визуализация результатов
+- [ ] **Графики метрик:**
+  - Разработать API для получения истории метрик (loss, perplexity) из сохраненных логов или интеграции с W&B.
+  - Использовать графические библиотеки (Chart.js, Recharts, Plotly) для отрисовки графиков в Web App.
+- [ ] **Отображение артефактов:**
+  - Реализовать вкладку просмотра результатов: сгенерированные изображения, сохраненные чекпоинты и другие артефакты.
 
-## Distributed Training & Scaling
-- [x] **Implement Multi-GPU Training via DeepSpeed/FSDP**
-  - **Description**: Wrap the training loop in `pretrain.py` with DeepSpeed (`deepspeed.initialize`) or PyTorch FSDP. Ensure data loading uses `DistributedSampler`.
-  - **Why**: Training large configurations (as in `configs/large_config.py`) requires multi-GPU scaling due to VRAM limitations on single GPUs.
-
-## Checkpointing & State Management
-- [x] **Enhance Checkpointing Mechanism**
-  - **Description**: Update the training scripts to save not just model weights (`model.state_dict()`), but also the optimizer state, learning rate scheduler state, current epoch, and global step.
-  - **Why**: In case of failures or resource preemption (especially in cloud environments), robust checkpointing allows resuming training without losing progress.
+## Шаг 5: Тестирование обученных моделей (Inference)
+- [ ] **Интерфейс чата/промптов:**
+  - Создать UI-компонент (похожий на чат или поле ввода), где пользователь может отправлять текстовые запросы в модель.
+- [ ] **Интеграция генерации текста:**
+  - Настроить бэкенд на загрузку выбранной модели (из доступных чекпоинтов) и выполнение inference для возврата ответа пользователю прямо в Web App.
