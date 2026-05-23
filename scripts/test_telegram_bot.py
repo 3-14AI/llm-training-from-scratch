@@ -33,9 +33,12 @@ def context():
 
 @pytest.mark.asyncio
 async def test_start_command(update, context):
+    context.bot.set_chat_menu_button = AsyncMock()
     await start_command(update, context)
     update.message.reply_html.assert_called_once()
     assert "Привет" in update.message.reply_html.call_args[0][0]
+    assert "reply_markup" in update.message.reply_html.call_args[1]
+    context.bot.set_chat_menu_button.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_help_command(update, context):
@@ -86,9 +89,10 @@ async def test_prepare_dataset_command(update, context):
 
 @pytest.mark.asyncio
 async def test_list_experiments_command(update, context):
-    await list_experiments_command(update, context)
-    update.message.reply_text.assert_called()
-    assert "Доступные эксперименты:" in update.message.reply_text.call_args_list[0][0][0]
+    with patch("telegram_bot.ALL_EXPERIMENTS", {"exp1": {"series": "1", "use_compression": False}}):
+        await list_experiments_command(update, context)
+        update.message.reply_text.assert_called()
+        assert "Доступные эксперименты:" in update.message.reply_text.call_args_list[0][0][0]
 
 @pytest.mark.asyncio
 async def test_run_experiment_command_no_args(update, context):

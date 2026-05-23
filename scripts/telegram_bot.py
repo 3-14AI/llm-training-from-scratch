@@ -8,6 +8,7 @@ from datetime import datetime
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, MenuButtonWebApp
 
 # Включить логирование
 logging.basicConfig(
@@ -50,9 +51,23 @@ def restricted(func):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отправляет приветственное сообщение при команде /start."""
     user = update.effective_user
+    webapp_url = os.environ.get("WEBAPP_URL", "https://127.0.0.1:8000/")
+
+    keyboard = [
+        [InlineKeyboardButton("Open Web App", web_app=WebAppInfo(url=webapp_url))]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Настройка кнопки меню
+    await context.bot.set_chat_menu_button(
+        chat_id=update.effective_chat.id,
+        menu_button=MenuButtonWebApp(text="Open App", web_app=WebAppInfo(url=webapp_url))
+    )
+
     await update.message.reply_html(
         f"Привет, {user.mention_html()}! Я бот для управления экспериментами LLM. "
-        "Используйте /help для списка команд."
+        "Используйте /help для списка команд или откройте Web App.",
+        reply_markup=reply_markup
     )
 
 

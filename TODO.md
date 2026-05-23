@@ -4,7 +4,7 @@
 - [x] **Выбор и настройка стека технологий:**
   - Развернуть frontend-приложение (например, React, Vue или HTML/JS) для пользовательского интерфейса.
   - Создать backend-сервер (например, FastAPI или Flask) для обработки запросов от Web App и управления процессами на сервере.
-- [ ] **Интеграция с Telegram:**
+- [x] **Интеграция с Telegram:**
   - Подключить Telegram Web Apps API (`telegram-web-app.js`) к frontend.
   - Обновить `scripts/telegram_bot.py`: добавить кнопку (Menu Button или Inline-кнопку) для открытия Web App внутри Telegram.
 
