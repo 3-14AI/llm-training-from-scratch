@@ -4,7 +4,7 @@
 import os
 import unittest
 from unittest.mock import patch
-from evaluation.lm_eval_wrapper import CustomLLMWrapper
+from evaluation_module.lm_eval_wrapper import CustomLLMWrapper
 
 class TestEvaluationIntegration(unittest.TestCase):
     """
@@ -24,7 +24,7 @@ class TestEvaluationIntegration(unittest.TestCase):
         if os.path.exists("pretrain_vocab.pt"):
             os.remove("pretrain_vocab.pt")
 
-    @patch("evaluation.lm_eval_wrapper.BPETokenizer.load_vocab")
+    @patch("evaluation_module.lm_eval_wrapper.BPETokenizer.load_vocab")
     def test_lm_eval_wrapper_initialization(self, mock_load) -> None:
         """
         Проверяет, что обертка успешно инициализируется со стандартной моделью.
@@ -32,7 +32,7 @@ class TestEvaluationIntegration(unittest.TestCase):
         wrapper = CustomLLMWrapper(model_path="dummy.pth", use_compression=False, device="cpu")
         self.assertIsNotNone(wrapper.model)
 
-    @patch("evaluation.lm_eval_wrapper.BPETokenizer.load_vocab")
+    @patch("evaluation_module.lm_eval_wrapper.BPETokenizer.load_vocab")
     def test_lm_eval_wrapper_compression_initialization(self, mock_load) -> None:
         """
         Проверяет, что обертка успешно инициализируется с моделью со сжатием контекста.

@@ -10,7 +10,6 @@ class DummyModel(nn.Module):
 
     def forward(self, src, trg):
         batch_size, seq_len = trg.shape
-        # Return logits of shape (batch_size, seq_len, vocab_size)
         return torch.zeros(batch_size, seq_len, self.vocab_size)
 
 class TestEvaluation(unittest.TestCase):
@@ -20,7 +19,6 @@ class TestEvaluation(unittest.TestCase):
         criterion = nn.CrossEntropyLoss()
         device = torch.device("cpu")
 
-        # Create dummy dataloader
         data = [
             (torch.randint(0, vocab_size, (5,)), torch.randint(0, vocab_size, (5,)))
             for _ in range(3)
