@@ -11,7 +11,7 @@ import torch
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from lm_eval import simple_evaluate
-from evaluation.lm_eval_wrapper import CustomLLMWrapper
+from evaluation_module.lm_eval_wrapper import CustomLLMWrapper
 
 def main() -> None:
     """

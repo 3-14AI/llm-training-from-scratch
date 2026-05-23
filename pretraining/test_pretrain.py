@@ -9,7 +9,7 @@ from pretraining.pretrain import main, train_model
 # Create dummy modules for mocking
 sys.modules['monitoring'] = MagicMock()
 sys.modules['monitoring.train_monitor'] = MagicMock()
-sys.modules['monitoring.evaluation'] = MagicMock()
+# sys.modules[.monitoring.evaluation.] = MagicMock()
 sys.modules['deepspeed'] = MagicMock()
 sys.modules['wandb'] = MagicMock()
 

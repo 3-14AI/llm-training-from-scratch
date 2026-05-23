@@ -8,7 +8,7 @@ from fine_tuning.finetune import train_model
 # Create dummy modules for mocking
 sys.modules['monitoring'] = MagicMock()
 sys.modules['monitoring.train_monitor'] = MagicMock()
-sys.modules['monitoring.evaluation'] = MagicMock()
+# sys.modules[.monitoring.evaluation.] = MagicMock()
 sys.modules['wandb'] = MagicMock()
 
 def test_checkpoint_saving_finetune():

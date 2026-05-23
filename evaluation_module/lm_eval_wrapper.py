@@ -28,7 +28,8 @@ class CustomLLMWrapper(LM):
             device (str): Устройство для вычислений ('cuda' или 'cpu').
         """
         super().__init__()
-        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
+        _device = torch.device(device if torch.cuda.is_available() else "cpu")
+        self._device = _device
         self.use_compression = use_compression
         self.chunk_size = chunk_size
 
