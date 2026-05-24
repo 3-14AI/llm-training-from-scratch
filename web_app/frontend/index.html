@@ -21,11 +21,59 @@
             border-radius: 5px;
             cursor: pointer;
         }
+
+        #terminal-container {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: monospace;
+        }
+        #terminal-output {
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+            padding: 5px;
+            border: 1px solid #333;
+            background-color: #000;
+        }
+        #terminal-input-container {
+            display: flex;
+        }
+        #cmd-input {
+            flex-grow: 1;
+            padding: 5px;
+            border: 1px solid #555;
+            border-radius: 3px;
+            background-color: #252526;
+            color: #d4d4d4;
+            font-family: monospace;
+        }
+        #cmd-input:focus {
+            outline: none;
+            border-color: #007acc;
+        }
+        .term-btn {
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
     <h1>Welcome to LLM Training Admin App</h1>
     <div id="user-info"></div>
+
+    <div id="terminal-container">
+        <h3>Terminal</h3>
+        <div id="terminal-output"></div>
+        <div id="terminal-input-container">
+            <input type="text" id="cmd-input" placeholder="Enter command (e.g., ls -la)" />
+            <button class="term-btn" onclick="executeCommand()">Run</button>
+            <button class="term-btn" onclick="clearTerminal()">Clear</button>
+        </div>
+    </div>
 
     <script>
         // Инициализация Telegram Web App
@@ -36,6 +84,60 @@
         if (initDataUnsafe.user) {
             document.getElementById('user-info').innerHTML =
                 `<p>Hello, ${initDataUnsafe.user.first_name}!</p>`;
+        }
+
+        const terminalOutput = document.getElementById('terminal-output');
+        const cmdInput = document.getElementById('cmd-input');
+
+        cmdInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                executeCommand();
+            }
+        });
+
+        function appendToTerminal(text, type='normal') {
+            const div = document.createElement('div');
+            div.textContent = text;
+            if (type === 'error') {
+                div.style.color = '#f48771';
+            } else if (type === 'command') {
+                div.style.color = '#569cd6';
+            }
+            terminalOutput.appendChild(div);
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        }
+
+        function clearTerminal() {
+            terminalOutput.innerHTML = '';
+        }
+
+        async function executeCommand() {
+            const command = cmdInput.value.trim();
+            if (!command) return;
+
+            appendToTerminal(`$ ${command}`, 'command');
+            cmdInput.value = '';
+
+            try {
+                const response = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ command: command })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.stdout) appendToTerminal(data.stdout);
+                    if (data.stderr) appendToTerminal(data.stderr, 'error');
+                } else {
+                    appendToTerminal(`Error: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
         }
     </script>
 </body>
