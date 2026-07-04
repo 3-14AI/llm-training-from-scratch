@@ -63,3 +63,45 @@ def test_websocket_logs():
 
         data = websocket.receive_text()
         assert data == "Test log message"
+
+import os
+
+def test_save_config():
+    test_config_name = "test_config_123"
+    payload = {
+        "config_name": test_config_name,
+        "epochs": 10,
+        "batch_size": 32,
+        "learning_rate": 0.001
+    }
+
+    response = client.post("/api/save_config", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "saved successfully" in data["message"]
+
+    config_path = data["path"]
+    assert os.path.exists(config_path)
+
+    with open(config_path, "r") as f:
+        content = f.read()
+
+    assert "[training]" in content
+    assert "epochs = 10" in content
+    assert "batch_size = 32" in content
+    assert "learning_rate = 0.001" in content
+
+    # Cleanup
+    os.remove(config_path)
+
+
+def test_save_config_invalid_name():
+    payload = {
+        "config_name": "../malicious",
+        "epochs": 10,
+        "batch_size": 32,
+        "learning_rate": 0.001
+    }
+
+    response = client.post("/api/save_config", json=payload)
+    assert response.status_code == 422 # Unprocessable Entity from Pydantic

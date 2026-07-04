@@ -48,6 +48,15 @@ def execute_command(req: CommandRequest):
 
 
 
+
+from pydantic import BaseModel, Field
+
+class ConfigRequest(BaseModel):
+    config_name: str = Field(..., description="Name of the configuration", pattern=r"^[a-zA-Z0-9_-]+$")
+    epochs: int = Field(..., description="Number of epochs")
+    batch_size: int = Field(..., description="Batch size")
+    learning_rate: float = Field(..., description="Learning rate")
+
 class ScriptRequest(BaseModel):
     script_type: str
 
@@ -121,6 +130,31 @@ async def run_script(req: ScriptRequest):
     asyncio.create_task(run_process_and_broadcast(command_parts))
 
     return {"message": f"Started {req.script_type} script in the background."}
+
+
+@app.post("/api/save_config")
+async def save_config(req: ConfigRequest):
+    """
+    Сохраняет конфигурацию обучения в configs/{config_name}.toml
+    """
+    import os
+    config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../configs")
+    os.makedirs(config_dir, exist_ok=True)
+
+    config_path = os.path.join(config_dir, f"{req.config_name}.toml")
+
+    toml_content = f"""[training]
+epochs = {req.epochs}
+batch_size = {req.batch_size}
+learning_rate = {req.learning_rate}
+"""
+
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(toml_content)
+        return {"message": f"Config {req.config_name} saved successfully.", "path": config_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save config: {str(e)}")
 
 @app.get("/api/health")
 def health_check():
