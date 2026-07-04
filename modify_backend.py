@@ -1,53 +1,16 @@
-import os
-import shlex
-import subprocess
-from pydantic import BaseModel
+import re
 
+with open("web_app/backend/main.py", "r", encoding="utf-8") as f:
+    content = f.read()
+
+imports = """
 import asyncio
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from typing import List
+"""
+content = re.sub(r"from fastapi import FastAPI, HTTPException", imports, content)
 
-from fastapi.staticfiles import StaticFiles
-
-app = FastAPI()
-
-ALLOWED_COMMANDS = {"ls", "echo", "pwd", "whoami", "python", "python3"}
-
-class CommandRequest(BaseModel):
-    command: str
-
-@app.post("/api/execute")
-def execute_command(req: CommandRequest):
-    """
-    Выполняет разрешенную shell-команду и возвращает результат.
-    """
-    if not req.command or not req.command.strip():
-        raise HTTPException(status_code=400, detail="Command cannot be empty")
-
-    try:
-        parts = shlex.split(req.command)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid command format: {str(e)}")
-
-    if not parts:
-        raise HTTPException(status_code=400, detail="Command is invalid")
-
-    base_cmd = parts[0]
-    if base_cmd not in ALLOWED_COMMANDS:
-        raise HTTPException(status_code=403, detail=f"Command '{base_cmd}' is not allowed")
-
-    try:
-        result = subprocess.run(parts, capture_output=True, text=True, timeout=10, shell=False)
-        return {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "returncode": result.returncode
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
+new_endpoints = """
 class ScriptRequest(BaseModel):
     script_type: str
 
@@ -121,11 +84,9 @@ async def run_script(req: ScriptRequest):
     asyncio.create_task(run_process_and_broadcast(command_parts))
 
     return {"message": f"Started {req.script_type} script in the background."}
+"""
 
-@app.get("/api/health")
-def health_check():
-    return {"status": "ok"}
+content = content.replace('@app.get("/api/health")', new_endpoints + '\n@app.get("/api/health")')
 
-# Construct absolute path for the frontend directory based on the location of main.py
-frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend")
-app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+with open("web_app/backend/main.py", "w", encoding="utf-8") as f:
+    f.write(content)
