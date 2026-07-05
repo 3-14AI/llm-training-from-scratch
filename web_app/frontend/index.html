@@ -75,6 +75,30 @@
     <div id="user-info"></div>
 
 
+
+    <div id="config-container" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: var(--tg-theme-bg-color, #f9f9f9);">
+        <h3>Configuration Settings</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px; max-width: 300px;">
+            <label>
+                Config Name:
+                <input type="text" id="config-name" placeholder="e.g. my_experiment" />
+            </label>
+            <label>
+                Epochs:
+                <input type="number" id="config-epochs" value="5" />
+            </label>
+            <label>
+                Batch Size:
+                <input type="number" id="config-batch-size" value="16" />
+            </label>
+            <label>
+                Learning Rate:
+                <input type="number" id="config-lr" step="0.0001" value="0.0001" />
+            </label>
+            <button onclick="saveConfig()">Save Config</button>
+        </div>
+    </div>
+
     <div class="dashboard">
         <button onclick="runScript('pretraining')">Pretraining</button>
         <button onclick="runScript('finetuning')">Fine-tuning</button>
@@ -148,6 +172,45 @@
             }
         }
 
+
+
+        async function saveConfig() {
+            const configName = document.getElementById('config-name').value.trim();
+            const epochs = parseInt(document.getElementById('config-epochs').value, 10);
+            const batchSize = parseInt(document.getElementById('config-batch-size').value, 10);
+            const learningRate = parseFloat(document.getElementById('config-lr').value);
+
+            if (!configName) {
+                appendToTerminal('Error: Config name cannot be empty', 'error');
+                return;
+            }
+
+            appendToTerminal(`> Saving config ${configName}...`, 'command');
+
+            try {
+                const response = await fetch('/api/save_config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        config_name: configName,
+                        epochs: epochs,
+                        batch_size: batchSize,
+                        learning_rate: learningRate
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    appendToTerminal(`Error saving config: ${data.detail}`, 'error');
+                } else {
+                    appendToTerminal(data.message, 'command');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
 
         if (initDataUnsafe.user) {
             document.getElementById('user-info').innerHTML =
