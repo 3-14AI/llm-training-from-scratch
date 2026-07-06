@@ -132,6 +132,59 @@ async def run_script(req: ScriptRequest):
     return {"message": f"Started {req.script_type} script in the background."}
 
 
+class QuickLaunchRequest(BaseModel):
+    config_name: str
+
+@app.get("/api/configs")
+async def get_configs():
+    """
+    Возвращает список доступных конфигураций.
+    """
+    # 1. Из файлов в директории configs/
+    config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../configs")
+    file_configs = []
+    if os.path.exists(config_dir):
+        for f in os.listdir(config_dir):
+            if f.endswith(".toml") or f.endswith(".py"):
+                file_configs.append(f)
+
+    # 2. Из experiment_configs.py (словарь ALL_EXPERIMENTS)
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../"))
+        from scripts.experiment_configs import ALL_EXPERIMENTS
+        experiment_configs = list(ALL_EXPERIMENTS.keys())
+    except Exception:
+        experiment_configs = []
+
+    return {
+        "file_configs": file_configs,
+        "experiment_configs": experiment_configs
+    }
+
+@app.post("/api/quick_launch")
+async def quick_launch(req: QuickLaunchRequest):
+    """
+    Запускает эксперимент с указанным конфигом.
+    """
+    if not req.config_name:
+        raise HTTPException(status_code=400, detail="config_name cannot be empty")
+
+    # Проверяем, это конфиг из файлов или из experiments
+    if req.config_name.endswith(".toml") or req.config_name.endswith(".py"):
+        # Это файл, возможно мы захотим его запустить каким-то скриптом (условно pretrain.py)
+        # Передадим как аргумент
+        command_parts = ["python", "pretraining/pretrain.py", "--config_file", req.config_name]
+    else:
+        # Это конфиг из ALL_EXPERIMENTS, используем experiment_runner
+        # Запустим e2e для быстроты или full в зависимости от задачи (захардкодим e2e для тестов)
+        command_parts = ["python", "scripts/experiment_runner.py", "--exp_name", req.config_name]
+
+    # Запускаем в бэкграунде
+    asyncio.create_task(run_process_and_broadcast(command_parts))
+
+    return {"message": f"Quick launch started for config: {req.config_name}"}
+
 @app.post("/api/save_config")
 async def save_config(req: ConfigRequest):
     """
