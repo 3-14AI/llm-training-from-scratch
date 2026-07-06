@@ -97,6 +97,18 @@
             </label>
             <button onclick="saveConfig()">Save Config</button>
         </div>
+
+        <hr style="margin: 15px 0;">
+        <h4>Quick Launch</h4>
+        <div style="display: flex; flex-direction: column; gap: 10px; max-width: 300px;">
+            <label>
+                Select Config:
+                <select id="quick-launch-select">
+                    <option value="">-- Loading... --</option>
+                </select>
+            </label>
+            <button onclick="quickLaunch()" style="background-color: var(--tg-theme-button-color, #f39c12);">Quick Launch</button>
+        </div>
     </div>
 
     <div class="dashboard">
@@ -149,6 +161,73 @@
         }
 
         connectWebSocket();
+
+        async function loadConfigs() {
+            try {
+                const response = await fetch('/api/configs');
+                const data = await response.json();
+
+                const select = document.getElementById('quick-launch-select');
+                select.innerHTML = '<option value="">-- Select Config --</option>';
+
+                if (data.file_configs && data.file_configs.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = "Files in configs/";
+                    data.file_configs.forEach(cfg => {
+                        const option = document.createElement('option');
+                        option.value = cfg;
+                        option.textContent = cfg;
+                        optgroup.appendChild(option);
+                    });
+                    select.appendChild(optgroup);
+                }
+
+                if (data.experiment_configs && data.experiment_configs.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = "Experiment configs";
+                    data.experiment_configs.forEach(cfg => {
+                        const option = document.createElement('option');
+                        option.value = cfg;
+                        option.textContent = cfg;
+                        optgroup.appendChild(option);
+                    });
+                    select.appendChild(optgroup);
+                }
+            } catch (error) {
+                appendToTerminal(`Error loading configs: ${error.message}`, 'error');
+            }
+        }
+
+        // Load configs on start
+        loadConfigs();
+
+        async function quickLaunch() {
+            const select = document.getElementById('quick-launch-select');
+            const configName = select.value;
+
+            if (!configName) {
+                appendToTerminal('Please select a config for Quick Launch.', 'error');
+                return;
+            }
+
+            appendToTerminal(`> Quick Launching: ${configName}...`, 'command');
+            try {
+                const response = await fetch('/api/quick_launch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config_name: configName })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    appendToTerminal(`Error: ${data.detail}`, 'error');
+                } else {
+                    appendToTerminal(data.message, 'command');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
 
         async function runScript(scriptType) {
             appendToTerminal(`> Starting script: ${scriptType}...`, 'command');

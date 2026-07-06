@@ -57,9 +57,13 @@ def test_websocket_logs():
         import asyncio
         from web_app.backend.main import manager
 
-        # We need to run this in an event loop because broadcast is async
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(manager.broadcast("Test log message"))
+        # Create a new event loop and set it
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(manager.broadcast("Test log message"))
+        finally:
+            loop.close()
 
         data = websocket.receive_text()
         assert data == "Test log message"
@@ -105,3 +109,31 @@ def test_save_config_invalid_name():
 
     response = client.post("/api/save_config", json=payload)
     assert response.status_code == 422 # Unprocessable Entity from Pydantic
+
+def test_get_configs():
+    response = client.get("/api/configs")
+    assert response.status_code == 200
+    data = response.json()
+    assert "file_configs" in data
+    assert "experiment_configs" in data
+    assert isinstance(data["file_configs"], list)
+    assert isinstance(data["experiment_configs"], list)
+
+def test_quick_launch_invalid():
+    response = client.post("/api/quick_launch", json={"config_name": ""})
+    assert response.status_code == 400
+    assert "cannot be empty" in response.json()["detail"]
+
+def test_quick_launch_valid_experiment():
+    with patch("web_app.backend.main.asyncio.create_task") as mock_create_task:
+        response = client.post("/api/quick_launch", json={"config_name": "s1_small_baseline"})
+        assert response.status_code == 200
+        assert "Quick launch started" in response.json()["message"]
+        mock_create_task.assert_called_once()
+
+def test_quick_launch_valid_file():
+    with patch("web_app.backend.main.asyncio.create_task") as mock_create_task:
+        response = client.post("/api/quick_launch", json={"config_name": "some_config.toml"})
+        assert response.status_code == 200
+        assert "Quick launch started" in response.json()["message"]
+        mock_create_task.assert_called_once()
