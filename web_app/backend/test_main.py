@@ -131,6 +131,32 @@ def test_quick_launch_valid_experiment():
         assert "Quick launch started" in response.json()["message"]
         mock_create_task.assert_called_once()
 
+from unittest.mock import mock_open
+
+@patch("os.path.exists")
+def test_get_metrics_no_file(mock_exists):
+    # Если файла нет, возвращаются мок-данные
+    mock_exists.return_value = False
+    response = client.get("/api/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "epochs" in data
+    assert "loss" in data
+    assert "perplexity" in data
+    assert data["epochs"] == [1, 2, 3, 4, 5]
+
+@patch("os.path.exists")
+@patch("builtins.open", new_callable=mock_open, read_data='{"epochs": [1, 2], "loss": [3.0, 2.5], "perplexity": [10.0, 8.0]}')
+def test_get_metrics_with_file(mock_file, mock_exists):
+    # Если файл есть, данные считываются из него
+    mock_exists.return_value = True
+    response = client.get("/api/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["epochs"] == [1, 2]
+    assert data["loss"] == [3.0, 2.5]
+    assert data["perplexity"] == [10.0, 8.0]
+
 def test_quick_launch_valid_file():
     with patch("web_app.backend.main.asyncio.create_task") as mock_create_task:
         response = client.post("/api/quick_launch", json={"config_name": "some_config.toml"})
