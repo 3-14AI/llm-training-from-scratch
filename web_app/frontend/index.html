@@ -3,6 +3,7 @@
 <head>
     <title>LLM Training Admin App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             background-color: var(--tg-theme-bg-color, #ffffff);
@@ -115,6 +116,12 @@
         <button onclick="runScript('pretraining')">Pretraining</button>
         <button onclick="runScript('finetuning')">Fine-tuning</button>
         <button onclick="runScript('evaluation')">Evaluation</button>
+    </div>
+
+    <div id="metrics-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
+        <h3>Визуализация (Metrics)</h3>
+        <button onclick="loadMetrics()">Load Metrics</button>
+        <canvas id="metricsChart" width="400" height="200" style="margin-top: 15px; display: none;"></canvas>
     </div>
 
     <div id="terminal-container">
@@ -319,6 +326,78 @@
 
         function clearTerminal() {
             terminalOutput.innerHTML = '';
+        }
+
+        let metricsChartInstance = null;
+
+        async function loadMetrics() {
+            try {
+                appendToTerminal('> Загрузка метрик...', 'command');
+                const response = await fetch('/api/metrics');
+                const data = await response.json();
+
+                if (response.ok) {
+                    appendToTerminal('Метрики успешно загружены', 'command');
+                    renderChart(data);
+                } else {
+                    appendToTerminal(`Ошибка загрузки метрик: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('metricsChart');
+            ctx.style.display = 'block';
+
+            if (metricsChartInstance) {
+                metricsChartInstance.destroy();
+            }
+
+            metricsChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.epochs,
+                    datasets: [
+                        {
+                            label: 'Loss',
+                            data: data.loss,
+                            borderColor: 'rgb(255, 99, 132)',
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Perplexity',
+                            data: data.perplexity,
+                            borderColor: 'rgb(54, 162, 235)',
+                            yAxisID: 'y1',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    stacked: false,
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                        },
+                    }
+                }
+            });
         }
 
         async function executeCommand() {

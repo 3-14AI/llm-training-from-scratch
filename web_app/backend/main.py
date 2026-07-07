@@ -209,6 +209,31 @@ learning_rate = {req.learning_rate}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save config: {str(e)}")
 
+import json
+
+@app.get("/api/metrics")
+async def get_metrics():
+    """
+    Возвращает историю метрик (loss, perplexity) для отображения на графиках.
+    Считывает данные из файла logs/metrics.json, если он существует.
+    Иначе возвращает мок-данные.
+    """
+    metrics_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../logs/metrics.json")
+    if os.path.exists(metrics_path):
+        try:
+            with open(metrics_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to read metrics: {str(e)}")
+
+    # Возвращаем мок-данные, если файла нет
+    return {
+        "epochs": [1, 2, 3, 4, 5],
+        "loss": [2.5, 2.0, 1.8, 1.5, 1.2],
+        "perplexity": [12.0, 7.5, 6.0, 4.5, 3.2]
+    }
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
