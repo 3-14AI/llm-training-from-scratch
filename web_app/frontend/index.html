@@ -118,6 +118,32 @@
         <button onclick="runScript('evaluation')">Evaluation</button>
     </div>
 
+    <div id="inference-container" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: var(--tg-theme-bg-color, #f9f9f9);">
+        <h3>Inference / Testing</h3>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <label>
+                Prompt:
+                <textarea id="inference-prompt" rows="3" style="width: 100%; border-radius: 4px; padding: 5px;" placeholder="Enter your text here..."></textarea>
+            </label>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <label>
+                    Max Tokens:
+                    <input type="number" id="inference-max-tokens" value="20" style="width: 60px;" />
+                </label>
+                <label>
+                    Temperature:
+                    <input type="number" id="inference-temperature" step="0.1" value="0.7" style="width: 60px;" />
+                </label>
+                <label>
+                    Model Path:
+                    <input type="text" id="inference-model-path" placeholder="e.g. pretrained_llm.pth" style="width: 150px;" />
+                </label>
+            </div>
+            <button onclick="runInference()" style="background-color: var(--tg-theme-button-color, #9b59b6); width: fit-content;">Generate</button>
+            <div id="inference-output" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; min-height: 50px; background-color: #fff; color: #000; white-space: pre-wrap;"></div>
+        </div>
+    </div>
+
     <div id="metrics-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
         <h3>Визуализация (Metrics)</h3>
         <button onclick="loadMetrics()">Load Metrics</button>
@@ -398,6 +424,52 @@
                     }
                 }
             });
+        }
+
+        async function runInference() {
+            const prompt = document.getElementById('inference-prompt').value.trim();
+            const maxTokens = parseInt(document.getElementById('inference-max-tokens').value, 10);
+            const temperature = parseFloat(document.getElementById('inference-temperature').value);
+            const modelPath = document.getElementById('inference-model-path').value.trim();
+            const outputDiv = document.getElementById('inference-output');
+
+            if (!prompt) {
+                outputDiv.textContent = 'Please enter a prompt.';
+                outputDiv.style.color = 'red';
+                return;
+            }
+
+            outputDiv.textContent = 'Generating...';
+            outputDiv.style.color = 'gray';
+            appendToTerminal(`> Running inference...`, 'command');
+
+            try {
+                const response = await fetch('/api/inference', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        max_tokens: maxTokens,
+                        temperature: temperature,
+                        model_path: modelPath
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    outputDiv.textContent = data.generated_text;
+                    outputDiv.style.color = '#000';
+                    appendToTerminal('Inference completed successfully', 'command');
+                } else {
+                    outputDiv.textContent = `Error: ${data.detail}`;
+                    outputDiv.style.color = 'red';
+                    appendToTerminal(`Error during inference: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                outputDiv.textContent = `Network Error: ${error.message}`;
+                outputDiv.style.color = 'red';
+                appendToTerminal(`Network Error during inference: ${error.message}`, 'error');
+            }
         }
 
         async function executeCommand() {
