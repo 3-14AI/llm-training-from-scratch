@@ -131,6 +131,55 @@ def test_quick_launch_valid_experiment():
         assert "Quick launch started" in response.json()["message"]
         mock_create_task.assert_called_once()
 
+@pytest.mark.asyncio
+def test_inference_valid():
+    # Patch asyncio.create_subprocess_exec directly to mock the subprocess behavior
+    with patch("web_app.backend.main.asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+        # Define mock process behavior
+        mock_process = AsyncMock()
+        mock_process.returncode = 0
+        mock_process.communicate.return_value = (b'{"status": "success", "prompt": "Hello", "generated_text": "Hello world"}', b'')
+        mock_exec.return_value = mock_process
+
+        payload = {
+            "prompt": "Hello",
+            "max_tokens": 10,
+            "temperature": 0.5,
+            "model_path": "dummy.pth"
+        }
+
+        # We need to run client.post directly, but the endpoint is async. FastAPI TestClient handles this automatically.
+        response = client.post("/api/inference", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["generated_text"] == "Hello world"
+        mock_exec.assert_called_once()
+
+def test_inference_empty_prompt():
+    payload = {
+        "prompt": "",
+        "max_tokens": 10
+    }
+    response = client.post("/api/inference", json=payload)
+    assert response.status_code == 400
+    assert "Prompt cannot be empty" in response.json()["detail"]
+
+@pytest.mark.asyncio
+def test_inference_script_failure():
+    with patch("web_app.backend.main.asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
+        mock_process = AsyncMock()
+        mock_process.returncode = 1
+        mock_process.communicate.return_value = (b'', b'Error loading model')
+        mock_exec.return_value = mock_process
+
+        payload = {
+            "prompt": "Test"
+        }
+        response = client.post("/api/inference", json=payload)
+        assert response.status_code == 500
+        assert "Inference process failed" in response.json()["detail"]
+
 from unittest.mock import mock_open
 
 @patch("os.path.exists")

@@ -234,6 +234,56 @@ async def get_metrics():
         "perplexity": [12.0, 7.5, 6.0, 4.5, 3.2]
     }
 
+class InferenceRequest(BaseModel):
+    prompt: str = Field(..., description="The prompt text to generate from")
+    max_tokens: int = Field(20, description="Maximum number of tokens to generate")
+    temperature: float = Field(0.7, description="Sampling temperature")
+    model_path: str = Field("", description="Path to the model checkpoint to use")
+
+@app.post("/api/inference")
+async def run_inference(req: InferenceRequest):
+    """
+    Запускает инференс модели и возвращает сгенерированный текст.
+    """
+    if not req.prompt or not req.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+
+    command = [
+        "python", "scripts/run_inference.py",
+        "--prompt", req.prompt,
+        "--max_tokens", str(req.max_tokens),
+        "--temperature", str(req.temperature)
+    ]
+    if req.model_path:
+        command.extend(["--model_path", req.model_path])
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            raise HTTPException(status_code=500, detail=f"Inference process failed: {stderr.decode('utf-8')}")
+
+        output = stdout.decode('utf-8').strip()
+        # Parse the JSON output from the script
+        try:
+            import json
+            result = json.loads(output)
+            if result.get("status") == "error":
+                raise HTTPException(status_code=500, detail=result.get("error"))
+            return {"generated_text": result.get("generated_text", "")}
+        except json.JSONDecodeError:
+            # Fallback if not JSON
+            return {"generated_text": output}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to run inference: {str(e)}")
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
