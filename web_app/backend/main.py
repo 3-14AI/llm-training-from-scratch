@@ -284,6 +284,39 @@ async def run_inference(req: InferenceRequest):
         raise HTTPException(status_code=500, detail=f"Failed to run inference: {str(e)}")
 
 
+@app.get("/api/artifacts")
+def get_artifacts():
+    """
+    Возвращает список артефактов (конфиги, логи, чекпоинты) из корневой директории проекта.
+    """
+    import os
+    import time
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    artifact_dirs = ["configs", "logs", "checkpoints", "checkpoints_finetune"]
+
+    artifacts = []
+
+    for d in artifact_dirs:
+        dir_path = os.path.join(project_root, d)
+        if os.path.exists(dir_path) and os.path.isdir(dir_path):
+            for root, _, files in os.walk(dir_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(file_path, project_root)
+                    stat = os.stat(file_path)
+
+                    artifacts.append({
+                        "name": file,
+                        "path": rel_path,
+                        "size": stat.st_size,
+                        "modified": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime)),
+                        "type": d
+                    })
+
+    return {"artifacts": artifacts}
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}

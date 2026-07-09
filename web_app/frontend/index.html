@@ -150,6 +150,14 @@
         <canvas id="metricsChart" width="400" height="200" style="margin-top: 15px; display: none;"></canvas>
     </div>
 
+    <div id="artifacts-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
+        <h3>Артефакты (Artifacts)</h3>
+        <button onclick="loadArtifacts()">Load Artifacts</button>
+        <div id="artifacts-list" style="margin-top: 15px; max-height: 300px; overflow-y: auto;">
+            <p style="color: gray;">No artifacts loaded yet.</p>
+        </div>
+    </div>
+
     <div id="terminal-container">
 
         <h3>Terminal</h3>
@@ -370,6 +378,43 @@
                 }
             } catch (error) {
                 appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadArtifacts() {
+            try {
+                appendToTerminal('> Загрузка артефактов...', 'command');
+                const response = await fetch('/api/artifacts');
+                const data = await response.json();
+
+                const listContainer = document.getElementById('artifacts-list');
+                listContainer.innerHTML = '';
+
+                if (response.ok) {
+                    appendToTerminal('Артефакты успешно загружены', 'command');
+                    if (data.artifacts && data.artifacts.length > 0) {
+                        const ul = document.createElement('ul');
+                        ul.style.listStyleType = 'none';
+                        ul.style.padding = '0';
+
+                        data.artifacts.forEach(item => {
+                            const li = document.createElement('li');
+                            li.style.borderBottom = '1px solid #eee';
+                            li.style.padding = '5px 0';
+                            li.innerHTML = `<strong>${item.name}</strong> <span style="color: gray; font-size: 0.9em;">(${item.type})</span> - ${item.size} bytes <br> <small style="color: darkgray;">Modified: ${item.modified}</small> <br> <small style="color: darkgray;">Path: ${item.path}</small>`;
+                            ul.appendChild(li);
+                        });
+                        listContainer.appendChild(ul);
+                    } else {
+                        listContainer.innerHTML = '<p style="color: gray;">No artifacts found.</p>';
+                    }
+                } else {
+                    appendToTerminal(`Ошибка загрузки артефактов: ${data.detail}`, 'error');
+                    listContainer.innerHTML = `<p style="color: red;">Error: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+                document.getElementById('artifacts-list').innerHTML = `<p style="color: red;">Network Error: ${error.message}</p>`;
             }
         }
 

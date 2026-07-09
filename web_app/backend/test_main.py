@@ -131,6 +131,13 @@ def test_quick_launch_valid_experiment():
         assert "Quick launch started" in response.json()["message"]
         mock_create_task.assert_called_once()
 
+def test_get_artifacts():
+    response = client.get("/api/artifacts")
+    assert response.status_code == 200
+    data = response.json()
+    assert "artifacts" in data
+    assert isinstance(data["artifacts"], list)
+
 @pytest.mark.asyncio
 def test_inference_valid():
     # Patch asyncio.create_subprocess_exec directly to mock the subprocess behavior
