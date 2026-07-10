@@ -234,6 +234,64 @@ async def get_metrics():
         "perplexity": [12.0, 7.5, 6.0, 4.5, 3.2]
     }
 
+from huggingface_hub import HfApi
+
+class ExportModelRequest(BaseModel):
+    model_path: str = Field(..., description="Path to the model to export (e.g., checkpoints_finetune/model.pth)")
+    hf_token: str = Field(..., description="Hugging Face access token")
+    repo_id: str = Field(..., description="Target Hugging Face repository ID (e.g., username/repo-name)")
+
+@app.post("/api/export_model")
+async def export_model(req: ExportModelRequest):
+    """
+    Экспортирует модель на Hugging Face Hub.
+    """
+    if not req.model_path or not req.hf_token or not req.repo_id:
+        raise HTTPException(status_code=400, detail="All fields are required")
+
+    # Path traversal and absolute path protection
+    clean_model_path = req.model_path.lstrip('/')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    full_model_path = os.path.abspath(os.path.join(project_root, clean_model_path))
+
+    if not full_model_path.startswith(project_root):
+        raise HTTPException(status_code=403, detail="Invalid path: Path traversal is not allowed")
+
+    if not os.path.exists(full_model_path):
+        raise HTTPException(status_code=404, detail=f"Model path not found: {req.model_path}")
+
+    try:
+        api = HfApi(token=req.hf_token)
+
+        # Verify repo exists or create it
+        try:
+            api.repo_info(repo_id=req.repo_id)
+        except Exception:
+            # Try to create it
+            try:
+                api.create_repo(repo_id=req.repo_id, exist_ok=True)
+            except Exception as e:
+                 raise HTTPException(status_code=500, detail=f"Failed to create repo: {str(e)}")
+
+        file_name = os.path.basename(full_model_path)
+
+        # Upload file
+        if os.path.isdir(full_model_path):
+            api.upload_folder(
+                folder_path=full_model_path,
+                repo_id=req.repo_id,
+            )
+        else:
+            api.upload_file(
+                path_or_fileobj=full_model_path,
+                path_in_repo=file_name,
+                repo_id=req.repo_id,
+            )
+
+        return {"message": f"Successfully exported to {req.repo_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export model: {str(e)}")
+
 class InferenceRequest(BaseModel):
     prompt: str = Field(..., description="The prompt text to generate from")
     max_tokens: int = Field(20, description="Maximum number of tokens to generate")
