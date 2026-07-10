@@ -187,6 +187,86 @@ def test_inference_script_failure():
         assert response.status_code == 500
         assert "Inference process failed" in response.json()["detail"]
 
+@patch("web_app.backend.main.HfApi")
+def test_export_model_valid_file(MockHfApi):
+    mock_api_instance = MockHfApi.return_value
+
+    # create dummy file
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    temp_dir = os.path.join(project_root, "checkpoints_finetune")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, "dummy_model.pth")
+    with open(temp_path, "wb") as f:
+        f.write(b"dummy")
+
+    try:
+        rel_path = os.path.relpath(temp_path, project_root)
+
+        payload = {
+            "model_path": rel_path,
+            "hf_token": "dummy_token",
+            "repo_id": "dummy_user/dummy_repo"
+        }
+        response = client.post("/api/export_model", json=payload)
+        assert response.status_code == 200
+        assert "Successfully exported" in response.json()["message"]
+
+        MockHfApi.assert_called_once_with(token="dummy_token")
+        mock_api_instance.repo_info.assert_called_once_with(repo_id="dummy_user/dummy_repo")
+        mock_api_instance.upload_file.assert_called_once()
+
+    finally:
+        os.remove(temp_path)
+
+@patch("web_app.backend.main.HfApi")
+def test_export_model_valid_dir(MockHfApi):
+    mock_api_instance = MockHfApi.return_value
+
+    # create dummy dir
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    temp_dir = os.path.join(project_root, "checkpoints_finetune", "dummy_dir")
+    os.makedirs(temp_dir, exist_ok=True)
+
+    try:
+        rel_path = os.path.relpath(temp_dir, project_root)
+
+        payload = {
+            "model_path": rel_path,
+            "hf_token": "dummy_token",
+            "repo_id": "dummy_user/dummy_repo"
+        }
+        response = client.post("/api/export_model", json=payload)
+        assert response.status_code == 200
+        assert "Successfully exported" in response.json()["message"]
+
+        MockHfApi.assert_called_once_with(token="dummy_token")
+        mock_api_instance.repo_info.assert_called_once_with(repo_id="dummy_user/dummy_repo")
+        mock_api_instance.upload_folder.assert_called_once()
+
+    finally:
+        os.rmdir(temp_dir)
+
+def test_export_model_path_traversal():
+    payload = {
+        "model_path": "../../etc/passwd",
+        "hf_token": "dummy_token",
+        "repo_id": "dummy_user/dummy_repo"
+    }
+    response = client.post("/api/export_model", json=payload)
+    assert response.status_code == 403
+    assert "Path traversal is not allowed" in response.json()["detail"]
+
+def test_export_model_not_found():
+    payload = {
+        "model_path": "non_existent_path",
+        "hf_token": "dummy_token",
+        "repo_id": "dummy_user/dummy_repo"
+    }
+    response = client.post("/api/export_model", json=payload)
+    assert response.status_code == 404
+
 from unittest.mock import mock_open
 
 @patch("os.path.exists")
