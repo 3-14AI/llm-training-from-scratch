@@ -4,19 +4,47 @@ import subprocess
 from pydantic import BaseModel
 
 import asyncio
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi.security import APIKeyHeader
 from typing import List
 
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
+# Ролевая модель: словарь токенов и соответствующих ролей
+TOKENS = {
+    "admin_secret": "admin",
+    "viewer_secret": "viewer"
+}
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def get_current_user(api_key: str = Depends(api_key_header)):
+    """
+    Проверяет валидность токена и возвращает роль пользователя.
+    """
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Missing API Key")
+    role = TOKENS.get(api_key)
+    if not role:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+    return role
+
+async def require_admin(role: str = Depends(get_current_user)):
+    """
+    Проверяет, что пользователь имеет роль admin.
+    """
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden: Admin access required")
+    return role
+
 ALLOWED_COMMANDS = {"ls", "echo", "pwd", "whoami", "python", "python3"}
 
 class CommandRequest(BaseModel):
     command: str
 
-@app.post("/api/execute")
+@app.post("/api/execute", dependencies=[Depends(require_admin)])
 def execute_command(req: CommandRequest):
     """
     Выполняет разрешенную shell-команду и возвращает результат.
@@ -81,7 +109,10 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 @app.websocket("/ws/logs")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
+    if not token or token not in TOKENS:
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
     await manager.connect(websocket)
     try:
         while True:
@@ -113,7 +144,7 @@ async def run_process_and_broadcast(command_parts: List[str]):
     await manager.broadcast(f"[SYSTEM] Process finished with exit code {process.returncode}")
 
 
-@app.post("/api/run_script")
+@app.post("/api/run_script", dependencies=[Depends(require_admin)])
 async def run_script(req: ScriptRequest):
     scripts = {
         "pretraining": ["python", "pretraining/pretrain.py"],
@@ -135,7 +166,7 @@ async def run_script(req: ScriptRequest):
 class QuickLaunchRequest(BaseModel):
     config_name: str
 
-@app.get("/api/configs")
+@app.get("/api/configs", dependencies=[Depends(get_current_user)])
 async def get_configs():
     """
     Возвращает список доступных конфигураций.
@@ -162,7 +193,7 @@ async def get_configs():
         "experiment_configs": experiment_configs
     }
 
-@app.post("/api/quick_launch")
+@app.post("/api/quick_launch", dependencies=[Depends(require_admin)])
 async def quick_launch(req: QuickLaunchRequest):
     """
     Запускает эксперимент с указанным конфигом.
@@ -185,7 +216,7 @@ async def quick_launch(req: QuickLaunchRequest):
 
     return {"message": f"Quick launch started for config: {req.config_name}"}
 
-@app.post("/api/save_config")
+@app.post("/api/save_config", dependencies=[Depends(require_admin)])
 async def save_config(req: ConfigRequest):
     """
     Сохраняет конфигурацию обучения в configs/{config_name}.toml
@@ -211,7 +242,7 @@ learning_rate = {req.learning_rate}
 
 import json
 
-@app.get("/api/metrics")
+@app.get("/api/metrics", dependencies=[Depends(get_current_user)])
 async def get_metrics():
     """
     Возвращает историю метрик (loss, perplexity) для отображения на графиках.
@@ -241,7 +272,7 @@ class ExportModelRequest(BaseModel):
     hf_token: str = Field(..., description="Hugging Face access token")
     repo_id: str = Field(..., description="Target Hugging Face repository ID (e.g., username/repo-name)")
 
-@app.post("/api/export_model")
+@app.post("/api/export_model", dependencies=[Depends(require_admin)])
 async def export_model(req: ExportModelRequest):
     """
     Экспортирует модель на Hugging Face Hub.
@@ -298,7 +329,7 @@ class InferenceRequest(BaseModel):
     temperature: float = Field(0.7, description="Sampling temperature")
     model_path: str = Field("", description="Path to the model checkpoint to use")
 
-@app.post("/api/inference")
+@app.post("/api/inference", dependencies=[Depends(get_current_user)])
 async def run_inference(req: InferenceRequest):
     """
     Запускает инференс модели и возвращает сгенерированный текст.
@@ -342,7 +373,7 @@ async def run_inference(req: InferenceRequest):
         raise HTTPException(status_code=500, detail=f"Failed to run inference: {str(e)}")
 
 
-@app.get("/api/artifacts")
+@app.get("/api/artifacts", dependencies=[Depends(get_current_user)])
 def get_artifacts():
     """
     Возвращает список артефактов (конфиги, логи, чекпоинты) из корневой директории проекта.

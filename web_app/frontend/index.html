@@ -75,7 +75,12 @@
     <h1>Welcome to LLM Training Admin App</h1>
     <div id="user-info"></div>
 
-
+    <div id="auth-container" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: var(--tg-theme-bg-color, #f9f9f9);">
+        <h3>Authentication</h3>
+        <input type="password" id="api-key-input" placeholder="Enter API Key" style="padding: 5px; width: 200px;">
+        <button onclick="saveApiKey()">Save Key</button>
+        <span id="auth-status" style="margin-left: 10px; color: gray;">No key saved</span>
+    </div>
 
     <div id="config-container" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: var(--tg-theme-bg-color, #f9f9f9);">
         <h3>Configuration Settings</h3>
@@ -195,11 +200,45 @@
 
         const initDataUnsafe = window.Telegram.WebApp.initDataUnsafe || {};
 
+        function getApiKey() {
+            return localStorage.getItem('api_key') || '';
+        }
+
+        function saveApiKey() {
+            const key = document.getElementById('api-key-input').value;
+            localStorage.setItem('api_key', key);
+            document.getElementById('auth-status').textContent = 'Key saved!';
+            document.getElementById('auth-status').style.color = 'green';
+            connectWebSocket(); // Reconnect websocket with new key
+        }
+
+        // Modified fetch to include auth headers and handle 401/403
+        async function fetchWithAuth(url, options = {}) {
+            const apiKey = getApiKey();
+            const headers = {
+                ...options.headers,
+                'X-API-Key': apiKey
+            };
+            const response = await fetch(url, { ...options, headers });
+
+            if (response.status === 401) {
+                appendToTerminal(`Unauthorized Access: Please check your API Key.`, 'error');
+            } else if (response.status === 403) {
+                appendToTerminal(`Forbidden: You do not have permission for this action.`, 'error');
+            }
+
+            return response;
+        }
+
         // WebSocket setup for logs
         let ws;
         function connectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+            const apiKey = getApiKey();
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/logs`;
+            const wsUrl = `${protocol}//${window.location.host}/ws/logs?token=${encodeURIComponent(apiKey)}`;
             ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
@@ -210,22 +249,33 @@
                 appendToTerminal(event.data);
             };
 
-            ws.onclose = () => {
-                appendToTerminal('WebSocket connection closed.', 'error');
-                // Optional: Attempt to reconnect after a delay
-                // setTimeout(connectWebSocket, 5000);
+            ws.onclose = (event) => {
+                if (event.code === 1008) {
+                    appendToTerminal('WebSocket disconnected: Unauthorized', 'error');
+                } else {
+                    appendToTerminal('WebSocket connection closed.', 'error');
+                }
             };
 
             ws.onerror = (error) => {
-                appendToTerminal(`WebSocket Error: ${error}`, 'error');
+                appendToTerminal(`WebSocket Error`, 'error');
             };
         }
 
-        connectWebSocket();
+        // Initialize token field if exists
+        document.addEventListener("DOMContentLoaded", () => {
+            const savedKey = getApiKey();
+            if (savedKey) {
+                document.getElementById('api-key-input').value = savedKey;
+                document.getElementById('auth-status').textContent = 'Key loaded';
+                document.getElementById('auth-status').style.color = 'green';
+            }
+            connectWebSocket();
+        });
 
         async function loadConfigs() {
             try {
-                const response = await fetch('/api/configs');
+                const response = await fetchWithAuth('/api/configs');
                 const data = await response.json();
 
                 const select = document.getElementById('quick-launch-select');
@@ -273,7 +323,7 @@
 
             appendToTerminal(`> Quick Launching: ${configName}...`, 'command');
             try {
-                const response = await fetch('/api/quick_launch', {
+                const response = await fetchWithAuth('/api/quick_launch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ config_name: configName })
@@ -293,7 +343,7 @@
         async function runScript(scriptType) {
             appendToTerminal(`> Starting script: ${scriptType}...`, 'command');
             try {
-                const response = await fetch('/api/run_script', {
+                const response = await fetchWithAuth('/api/run_script', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -328,7 +378,7 @@
             appendToTerminal(`> Saving config ${configName}...`, 'command');
 
             try {
-                const response = await fetch('/api/save_config', {
+                const response = await fetchWithAuth('/api/save_config', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -387,7 +437,7 @@
         async function loadMetrics() {
             try {
                 appendToTerminal('> Загрузка метрик...', 'command');
-                const response = await fetch('/api/metrics');
+                const response = await fetchWithAuth('/api/metrics');
                 const data = await response.json();
 
                 if (response.ok) {
@@ -404,7 +454,7 @@
         async function loadArtifacts() {
             try {
                 appendToTerminal('> Загрузка артефактов...', 'command');
-                const response = await fetch('/api/artifacts');
+                const response = await fetchWithAuth('/api/artifacts');
                 const data = await response.json();
 
                 const listContainer = document.getElementById('artifacts-list');
@@ -508,7 +558,7 @@
             appendToTerminal(`> Exporting model to ${repoId}...`, 'command');
 
             try {
-                const response = await fetch('/api/export_model', {
+                const response = await fetchWithAuth('/api/export_model', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -553,7 +603,7 @@
             appendToTerminal(`> Running inference...`, 'command');
 
             try {
-                const response = await fetch('/api/inference', {
+                const response = await fetchWithAuth('/api/inference', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -589,7 +639,7 @@
             cmdInput.value = '';
 
             try {
-                const response = await fetch('/api/execute', {
+                const response = await fetchWithAuth('/api/execute', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
