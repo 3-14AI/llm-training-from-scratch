@@ -3,13 +3,16 @@ from web_app.backend.main import app
 
 client = TestClient(app)
 
+ADMIN_HEADERS = {"X-API-Key": "admin_secret"}
+VIEWER_HEADERS = {"X-API-Key": "viewer_secret"}
+
 def test_health_check():
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 def test_execute_allowed_command():
-    response = client.post("/api/execute", json={"command": "echo Hello"})
+    response = client.post("/api/execute", json={"command": "echo Hello"}, headers=ADMIN_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert "stdout" in data
@@ -17,21 +20,21 @@ def test_execute_allowed_command():
     assert data["returncode"] == 0
 
 def test_execute_forbidden_command():
-    response = client.post("/api/execute", json={"command": "rm -rf /"})
+    response = client.post("/api/execute", json={"command": "rm -rf /"}, headers=ADMIN_HEADERS)
     assert response.status_code == 403
     assert "not allowed" in response.json()["detail"]
 
 def test_execute_empty_command():
-    response = client.post("/api/execute", json={"command": ""})
+    response = client.post("/api/execute", json={"command": ""}, headers=ADMIN_HEADERS)
     assert response.status_code == 400
     assert "cannot be empty" in response.json()["detail"]
 
-    response = client.post("/api/execute", json={"command": "   "})
+    response = client.post("/api/execute", json={"command": "   "}, headers=ADMIN_HEADERS)
     assert response.status_code == 400
     assert "cannot be empty" in response.json()["detail"]
 
 def test_execute_invalid_shlex():
-    response = client.post("/api/execute", json={"command": 'echo "unclosed quote'})
+    response = client.post("/api/execute", json={"command": 'echo "unclosed quote'}, headers=ADMIN_HEADERS)
     assert response.status_code == 400
     assert "Invalid command format" in response.json()["detail"]
 
@@ -41,18 +44,18 @@ import pytest
 
 def test_run_script_valid():
     with patch("web_app.backend.main.asyncio.create_task") as mock_create_task:
-        response = client.post("/api/run_script", json={"script_type": "pretraining"})
+        response = client.post("/api/run_script", json={"script_type": "pretraining"}, headers=ADMIN_HEADERS)
         assert response.status_code == 200
         assert "Started pretraining script" in response.json()["message"]
         mock_create_task.assert_called_once()
 
 def test_run_script_invalid():
-    response = client.post("/api/run_script", json={"script_type": "invalid_script"})
+    response = client.post("/api/run_script", json={"script_type": "invalid_script"}, headers=ADMIN_HEADERS)
     assert response.status_code == 400
     assert "Unknown script type" in response.json()["detail"]
 
 def test_websocket_logs():
-    with client.websocket_connect("/ws/logs") as websocket:
+    with client.websocket_connect("/ws/logs?token=viewer_secret") as websocket:
         # Simulate broadcasting a message internally
         import asyncio
         from web_app.backend.main import manager
@@ -79,7 +82,7 @@ def test_save_config():
         "learning_rate": 0.001
     }
 
-    response = client.post("/api/save_config", json=payload)
+    response = client.post("/api/save_config", json=payload, headers=ADMIN_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert "saved successfully" in data["message"]
@@ -107,11 +110,11 @@ def test_save_config_invalid_name():
         "learning_rate": 0.001
     }
 
-    response = client.post("/api/save_config", json=payload)
+    response = client.post("/api/save_config", json=payload, headers=ADMIN_HEADERS)
     assert response.status_code == 422 # Unprocessable Entity from Pydantic
 
 def test_get_configs():
-    response = client.get("/api/configs")
+    response = client.get("/api/configs", headers=VIEWER_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert "file_configs" in data
@@ -120,19 +123,19 @@ def test_get_configs():
     assert isinstance(data["experiment_configs"], list)
 
 def test_quick_launch_invalid():
-    response = client.post("/api/quick_launch", json={"config_name": ""})
+    response = client.post("/api/quick_launch", json={"config_name": ""}, headers=ADMIN_HEADERS)
     assert response.status_code == 400
     assert "cannot be empty" in response.json()["detail"]
 
 def test_quick_launch_valid_experiment():
     with patch("web_app.backend.main.asyncio.create_task") as mock_create_task:
-        response = client.post("/api/quick_launch", json={"config_name": "s1_small_baseline"})
+        response = client.post("/api/quick_launch", json={"config_name": "s1_small_baseline"}, headers=ADMIN_HEADERS)
         assert response.status_code == 200
         assert "Quick launch started" in response.json()["message"]
         mock_create_task.assert_called_once()
 
 def test_get_artifacts():
-    response = client.get("/api/artifacts")
+    response = client.get("/api/artifacts", headers=VIEWER_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert "artifacts" in data
@@ -156,7 +159,7 @@ def test_inference_valid():
         }
 
         # We need to run client.post directly, but the endpoint is async. FastAPI TestClient handles this automatically.
-        response = client.post("/api/inference", json=payload)
+        response = client.post("/api/inference", json=payload, headers=VIEWER_HEADERS)
 
         assert response.status_code == 200
         data = response.json()
@@ -168,7 +171,7 @@ def test_inference_empty_prompt():
         "prompt": "",
         "max_tokens": 10
     }
-    response = client.post("/api/inference", json=payload)
+    response = client.post("/api/inference", json=payload, headers=VIEWER_HEADERS)
     assert response.status_code == 400
     assert "Prompt cannot be empty" in response.json()["detail"]
 
@@ -183,7 +186,7 @@ def test_inference_script_failure():
         payload = {
             "prompt": "Test"
         }
-        response = client.post("/api/inference", json=payload)
+        response = client.post("/api/inference", json=payload, headers=VIEWER_HEADERS)
         assert response.status_code == 500
         assert "Inference process failed" in response.json()["detail"]
 
@@ -208,7 +211,7 @@ def test_export_model_valid_file(MockHfApi):
             "hf_token": "dummy_token",
             "repo_id": "dummy_user/dummy_repo"
         }
-        response = client.post("/api/export_model", json=payload)
+        response = client.post("/api/export_model", json=payload, headers=ADMIN_HEADERS)
         assert response.status_code == 200
         assert "Successfully exported" in response.json()["message"]
 
@@ -237,7 +240,7 @@ def test_export_model_valid_dir(MockHfApi):
             "hf_token": "dummy_token",
             "repo_id": "dummy_user/dummy_repo"
         }
-        response = client.post("/api/export_model", json=payload)
+        response = client.post("/api/export_model", json=payload, headers=ADMIN_HEADERS)
         assert response.status_code == 200
         assert "Successfully exported" in response.json()["message"]
 
@@ -254,7 +257,8 @@ def test_export_model_path_traversal():
         "hf_token": "dummy_token",
         "repo_id": "dummy_user/dummy_repo"
     }
-    response = client.post("/api/export_model", json=payload)
+    response = client.post("/api/export_model", json=payload, headers=ADMIN_HEADERS)
+    response = client.post("/api/export_model", json=payload, headers=ADMIN_HEADERS)
     assert response.status_code == 403
     assert "Path traversal is not allowed" in response.json()["detail"]
 
@@ -264,7 +268,7 @@ def test_export_model_not_found():
         "hf_token": "dummy_token",
         "repo_id": "dummy_user/dummy_repo"
     }
-    response = client.post("/api/export_model", json=payload)
+    response = client.post("/api/export_model", json=payload, headers=ADMIN_HEADERS)
     assert response.status_code == 404
 
 from unittest.mock import mock_open
@@ -273,7 +277,7 @@ from unittest.mock import mock_open
 def test_get_metrics_no_file(mock_exists):
     # Если файла нет, возвращаются мок-данные
     mock_exists.return_value = False
-    response = client.get("/api/metrics")
+    response = client.get("/api/metrics", headers=VIEWER_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert "epochs" in data
@@ -286,7 +290,7 @@ def test_get_metrics_no_file(mock_exists):
 def test_get_metrics_with_file(mock_file, mock_exists):
     # Если файл есть, данные считываются из него
     mock_exists.return_value = True
-    response = client.get("/api/metrics")
+    response = client.get("/api/metrics", headers=VIEWER_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["epochs"] == [1, 2]
@@ -295,7 +299,22 @@ def test_get_metrics_with_file(mock_file, mock_exists):
 
 def test_quick_launch_valid_file():
     with patch("web_app.backend.main.asyncio.create_task") as mock_create_task:
-        response = client.post("/api/quick_launch", json={"config_name": "some_config.toml"})
+        response = client.post("/api/quick_launch", json={"config_name": "some_config.toml"}, headers=ADMIN_HEADERS)
         assert response.status_code == 200
         assert "Quick launch started" in response.json()["message"]
         mock_create_task.assert_called_once()
+
+def test_missing_auth():
+    response = client.get("/api/configs")
+    assert response.status_code == 401
+
+    response = client.post("/api/execute", json={"command": "echo Hello"})
+    assert response.status_code == 401
+
+def test_invalid_auth():
+    response = client.get("/api/configs", headers={"X-API-Key": "invalid_key"})
+    assert response.status_code == 401
+
+def test_viewer_access_admin_endpoint():
+    response = client.post("/api/execute", json={"command": "echo Hello"}, headers=VIEWER_HEADERS)
+    assert response.status_code == 403
