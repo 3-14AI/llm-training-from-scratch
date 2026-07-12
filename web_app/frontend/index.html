@@ -137,7 +137,23 @@
                 </label>
                 <label>
                     Temperature:
-                    <input type="number" id="inference-temperature" step="0.1" value="0.7" style="width: 60px;" />
+                    <input type="range" id="inference-temperature-slider" min="0.0" max="2.0" step="0.1" value="0.7" oninput="document.getElementById('inference-temperature').value = this.value" style="width: 100px; vertical-align: middle;" />
+                    <input type="number" id="inference-temperature" step="0.1" value="0.7" oninput="document.getElementById('inference-temperature-slider').value = this.value" style="width: 60px;" />
+                </label>
+                <label>
+                    Top-K:
+                    <input type="range" id="inference-top-k-slider" min="0" max="100" step="1" value="0" oninput="document.getElementById('inference-top-k').value = this.value" style="width: 100px; vertical-align: middle;" />
+                    <input type="number" id="inference-top-k" step="1" value="0" oninput="document.getElementById('inference-top-k-slider').value = this.value" style="width: 60px;" />
+                </label>
+                <label>
+                    Top-p:
+                    <input type="range" id="inference-top-p-slider" min="0.0" max="1.0" step="0.05" value="1.0" oninput="document.getElementById('inference-top-p').value = this.value" style="width: 100px; vertical-align: middle;" />
+                    <input type="number" id="inference-top-p" step="0.05" value="1.0" oninput="document.getElementById('inference-top-p-slider').value = this.value" style="width: 60px;" />
+                </label>
+                <label>
+                    Repetition Penalty:
+                    <input type="range" id="inference-repetition-penalty-slider" min="1.0" max="2.0" step="0.1" value="1.0" oninput="document.getElementById('inference-repetition-penalty').value = this.value" style="width: 100px; vertical-align: middle;" />
+                    <input type="number" id="inference-repetition-penalty" step="0.1" value="1.0" oninput="document.getElementById('inference-repetition-penalty-slider').value = this.value" style="width: 60px;" />
                 </label>
                 <label>
                     Model Path:
@@ -589,6 +605,9 @@
             const prompt = document.getElementById('inference-prompt').value.trim();
             const maxTokens = parseInt(document.getElementById('inference-max-tokens').value, 10);
             const temperature = parseFloat(document.getElementById('inference-temperature').value);
+            const topK = parseInt(document.getElementById('inference-top-k').value, 10);
+            const topP = parseFloat(document.getElementById('inference-top-p').value);
+            const repetitionPenalty = parseFloat(document.getElementById('inference-repetition-penalty').value);
             const modelPath = document.getElementById('inference-model-path').value.trim();
             const outputDiv = document.getElementById('inference-output');
 
@@ -610,6 +629,9 @@
                         prompt: prompt,
                         max_tokens: maxTokens,
                         temperature: temperature,
+                        top_k: topK,
+                        top_p: topP,
+                        repetition_penalty: repetitionPenalty,
                         model_path: modelPath
                     })
                 });

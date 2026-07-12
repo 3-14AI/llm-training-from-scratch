@@ -16,6 +16,9 @@ def main():
     parser.add_argument("--prompt", type=str, required=True, help="Input prompt")
     parser.add_argument("--max_tokens", type=int, default=20, help="Maximum number of tokens to generate")
     parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
+    parser.add_argument("--top_k", type=int, default=0, help="Top-K sampling")
+    parser.add_argument("--top_p", type=float, default=1.0, help="Top-p (nucleus) sampling")
+    parser.add_argument("--repetition_penalty", type=float, default=1.0, help="Repetition penalty")
     parser.add_argument("--model_path", type=str, default="", help="Path to the model checkpoint")
     parser.add_argument("--use_compression", action="store_true", help="Use context compression transformer")
     parser.add_argument("--chunk_size", type=int, default=8, help="Size of context chunks used during training")
@@ -72,7 +75,7 @@ def main():
         model.load_state_dict(torch.load(model_path, map_location=device))
 
     try:
-        generated_text = generate_text(model, tokenizer, args.prompt, args.max_tokens, device, args.temperature)
+        generated_text = generate_text(model, tokenizer, args.prompt, args.max_tokens, device, args.temperature, args.top_k, args.top_p, args.repetition_penalty)
         result = {
             "prompt": args.prompt,
             "generated_text": generated_text,

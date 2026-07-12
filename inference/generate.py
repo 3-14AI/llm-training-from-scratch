@@ -6,7 +6,7 @@ from data_preparation.tokenizer import BPETokenizer
 import os
 import argparse
 
-def generate_text(model, tokenizer, prompt, max_new_tokens, device, temperature=1.0):
+def generate_text(model, tokenizer, prompt, max_new_tokens, device, temperature=1.0, top_k=0, top_p=1.0, repetition_penalty=1.0):
     model.eval()
     # Encode the prompt
     encoded_prompt = tokenizer.encode(prompt)
@@ -33,12 +33,46 @@ def generate_text(model, tokenizer, prompt, max_new_tokens, device, temperature=
         # Focus only on the last token's prediction
         logits = output[:, -1, :]
 
+        # Apply repetition penalty
+        if repetition_penalty != 1.0 and len(generated_tokens) > 0:
+            for token_id in set(generated_tokens):
+                if logits[0, token_id] < 0:
+                    logits[0, token_id] *= repetition_penalty
+                else:
+                    logits[0, token_id] /= repetition_penalty
+
         # Apply temperature for sampling
         logits = logits / (temperature + 1e-8)
+
+        # Top-K sampling
+        if top_k > 0:
+            top_k = min(top_k, logits.size(-1))  # Safety check
+            indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+            logits[indices_to_remove] = -float('Inf')
+
+        # Top-p (nucleus) sampling
+        if top_p < 1.0:
+            sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+            cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+
+            # Remove tokens with cumulative probability above the threshold (token with 0 are kept)
+            sorted_indices_to_remove = cumulative_probs > top_p
+
+            # Shift the indices to the right to keep also the first token above the threshold
+            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+            sorted_indices_to_remove[..., 0] = 0
+
+            # Scatter sorted tensors to original indexing
+            indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+            logits[indices_to_remove] = -float('Inf')
+
         probs = F.softmax(logits, dim=-1)
 
         # Sample from the distribution
-        next_token = torch.multinomial(probs, num_samples=1)
+        if torch.isnan(probs).any() or torch.isinf(probs).any() or (probs < 0).any():
+            next_token = torch.argmax(logits, dim=-1).unsqueeze(-1)
+        else:
+            next_token = torch.multinomial(probs, num_samples=1)
 
         # Append to the list of generated tokens and update context
         generated_tokens.append(next_token.item())
