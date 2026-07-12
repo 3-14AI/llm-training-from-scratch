@@ -327,6 +327,9 @@ class InferenceRequest(BaseModel):
     prompt: str = Field(..., description="The prompt text to generate from")
     max_tokens: int = Field(20, description="Maximum number of tokens to generate")
     temperature: float = Field(0.7, description="Sampling temperature")
+    top_k: int = Field(0, description="Top-K sampling")
+    top_p: float = Field(1.0, description="Top-p (nucleus) sampling")
+    repetition_penalty: float = Field(1.0, description="Repetition penalty")
     model_path: str = Field("", description="Path to the model checkpoint to use")
 
 @app.post("/api/inference", dependencies=[Depends(get_current_user)])
@@ -341,7 +344,10 @@ async def run_inference(req: InferenceRequest):
         "python", "scripts/run_inference.py",
         "--prompt", req.prompt,
         "--max_tokens", str(req.max_tokens),
-        "--temperature", str(req.temperature)
+        "--temperature", str(req.temperature),
+        "--top_k", str(req.top_k),
+        "--top_p", str(req.top_p),
+        "--repetition_penalty", str(req.repetition_penalty)
     ]
     if req.model_path:
         command.extend(["--model_path", req.model_path])
