@@ -379,6 +379,49 @@ async def run_inference(req: InferenceRequest):
         raise HTTPException(status_code=500, detail=f"Failed to run inference: {str(e)}")
 
 
+class DeleteArtifactRequest(BaseModel):
+    artifact_path: str = Field(..., description="Relative path of the artifact to delete")
+
+@app.post("/api/delete_artifact", dependencies=[Depends(require_admin)])
+async def delete_artifact(req: DeleteArtifactRequest):
+    """
+    Deletes an artifact (file or directory).
+    """
+    if not req.artifact_path:
+        raise HTTPException(status_code=400, detail="artifact_path is required")
+
+    clean_path = req.artifact_path.lstrip('/')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    full_path = os.path.abspath(os.path.join(project_root, clean_path))
+
+    if not full_path.startswith(project_root):
+        raise HTTPException(status_code=403, detail="Invalid path: Path traversal is not allowed")
+
+    # Double check it belongs to one of the allowed directories
+    artifact_dirs = ["configs", "logs", "checkpoints", "checkpoints_finetune"]
+    allowed = False
+    for d in artifact_dirs:
+        if full_path.startswith(os.path.abspath(os.path.join(project_root, d))):
+            allowed = True
+            break
+
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Cannot delete files outside of artifact directories")
+
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    try:
+        if os.path.isdir(full_path):
+            import shutil
+            shutil.rmtree(full_path)
+        else:
+            os.remove(full_path)
+        return {"message": "Artifact deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete artifact: {str(e)}")
+
+
 @app.get("/api/artifacts", dependencies=[Depends(get_current_user)])
 def get_artifacts():
     """

@@ -141,6 +141,67 @@ def test_get_artifacts():
     assert "artifacts" in data
     assert isinstance(data["artifacts"], list)
 
+
+def test_delete_artifact_valid():
+    # create dummy file
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    temp_dir = os.path.join(project_root, "configs")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, "dummy_to_delete.txt")
+    with open(temp_path, "wb") as f:
+        f.write(b"dummy")
+
+    try:
+        rel_path = os.path.relpath(temp_path, project_root)
+        payload = {"artifact_path": rel_path}
+
+        response = client.post("/api/delete_artifact", json=payload, headers=ADMIN_HEADERS)
+        assert response.status_code == 200
+        assert "deleted successfully" in response.json()["message"]
+        assert not os.path.exists(temp_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def test_delete_artifact_unauthorized():
+    payload = {"artifact_path": "configs/test.txt"}
+    response = client.post("/api/delete_artifact", json=payload, headers=VIEWER_HEADERS)
+    assert response.status_code == 403
+
+def test_delete_artifact_path_traversal():
+    payload = {"artifact_path": "../../etc/passwd"}
+    response = client.post("/api/delete_artifact", json=payload, headers=ADMIN_HEADERS)
+    assert response.status_code == 403
+    assert "Path traversal is not allowed" in response.json()["detail"]
+
+def test_delete_artifact_outside_allowed_dirs():
+    # create dummy file outside of artifact dirs but inside project
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    temp_dir = os.path.join(project_root, "web_app")
+    temp_path = os.path.join(temp_dir, "dummy_to_delete.txt")
+    with open(temp_path, "wb") as f:
+        f.write(b"dummy")
+
+    try:
+        rel_path = os.path.relpath(temp_path, project_root)
+        payload = {"artifact_path": rel_path}
+
+        response = client.post("/api/delete_artifact", json=payload, headers=ADMIN_HEADERS)
+        assert response.status_code == 403
+        assert "Cannot delete files outside of artifact directories" in response.json()["detail"]
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def test_delete_artifact_not_found():
+    payload = {"artifact_path": "configs/non_existent_file.txt"}
+    response = client.post("/api/delete_artifact", json=payload, headers=ADMIN_HEADERS)
+    assert response.status_code == 404
+    assert "Artifact not found" in response.json()["detail"]
+
+
 @pytest.mark.asyncio
 def test_inference_valid():
     # Patch asyncio.create_subprocess_exec directly to mock the subprocess behavior

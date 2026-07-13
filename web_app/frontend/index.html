@@ -487,7 +487,19 @@
                             const li = document.createElement('li');
                             li.style.borderBottom = '1px solid #eee';
                             li.style.padding = '5px 0';
-                            li.innerHTML = `<strong>${item.name}</strong> <span style="color: gray; font-size: 0.9em;">(${item.type})</span> - ${item.size} bytes <br> <small style="color: darkgray;">Modified: ${item.modified}</small> <br> <small style="color: darkgray;">Path: ${item.path}</small>`;
+
+                            const contentDiv = document.createElement('div');
+                            contentDiv.innerHTML = `<strong>${item.name}</strong> <span style="color: gray; font-size: 0.9em;">(${item.type})</span> - ${item.size} bytes <br> <small style="color: darkgray;">Modified: ${item.modified}</small> <br> <small style="color: darkgray;">Path: ${item.path}</small>`;
+
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.textContent = 'Delete';
+                            deleteBtn.style.backgroundColor = '#e74c3c';
+                            deleteBtn.style.padding = '2px 8px';
+                            deleteBtn.style.marginTop = '5px';
+                            deleteBtn.onclick = () => deleteArtifact(item.path);
+
+                            li.appendChild(contentDiv);
+                            li.appendChild(deleteBtn);
                             ul.appendChild(li);
                         });
                         listContainer.appendChild(ul);
@@ -501,6 +513,31 @@
             } catch (error) {
                 appendToTerminal(`Network Error: ${error.message}`, 'error');
                 document.getElementById('artifacts-list').innerHTML = `<p style="color: red;">Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function deleteArtifact(artifactPath) {
+            if (!confirm(`Are you sure you want to delete ${artifactPath}?`)) {
+                return;
+            }
+
+            appendToTerminal(`> Deleting artifact: ${artifactPath}...`, 'command');
+            try {
+                const response = await fetchWithAuth('/api/delete_artifact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ artifact_path: artifactPath })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    appendToTerminal(data.message, 'command');
+                    loadArtifacts(); // Refresh the list
+                } else {
+                    appendToTerminal(`Error deleting artifact: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
             }
         }
 
