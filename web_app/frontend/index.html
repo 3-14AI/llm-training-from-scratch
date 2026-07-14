@@ -498,8 +498,17 @@
                             deleteBtn.style.marginTop = '5px';
                             deleteBtn.onclick = () => deleteArtifact(item.path);
 
+                            const downloadBtn = document.createElement('button');
+                            downloadBtn.textContent = 'Download';
+                            downloadBtn.style.backgroundColor = '#27ae60';
+                            downloadBtn.style.padding = '2px 8px';
+                            downloadBtn.style.marginTop = '5px';
+                            downloadBtn.style.marginLeft = '5px';
+                            downloadBtn.onclick = () => downloadArtifact(item.path);
+
                             li.appendChild(contentDiv);
                             li.appendChild(deleteBtn);
+                            li.appendChild(downloadBtn);
                             ul.appendChild(li);
                         });
                         listContainer.appendChild(ul);
@@ -513,6 +522,37 @@
             } catch (error) {
                 appendToTerminal(`Network Error: ${error.message}`, 'error');
                 document.getElementById('artifacts-list').innerHTML = `<p style="color: red;">Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function downloadArtifact(artifactPath) {
+            appendToTerminal(`> Downloading artifact: ${artifactPath}...`, 'command');
+            try {
+                const response = await fetchWithAuth(`/api/download_artifact?artifact_path=${encodeURIComponent(artifactPath)}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    // Extract filename from path
+                    const filename = artifactPath.split('/').pop();
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    appendToTerminal(`Downloaded ${filename} successfully`, 'command');
+                } else {
+                    const errorText = await response.text();
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        appendToTerminal(`Error downloading artifact: ${errorJson.detail}`, 'error');
+                    } catch (e) {
+                        appendToTerminal(`Error downloading artifact: ${response.status} ${response.statusText}`, 'error');
+                    }
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
             }
         }
 

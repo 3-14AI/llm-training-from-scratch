@@ -382,6 +382,43 @@ async def run_inference(req: InferenceRequest):
 class DeleteArtifactRequest(BaseModel):
     artifact_path: str = Field(..., description="Relative path of the artifact to delete")
 
+from fastapi.responses import FileResponse
+
+@app.get("/api/download_artifact", dependencies=[Depends(get_current_user)])
+async def download_artifact(artifact_path: str):
+    """
+    Downloads an artifact file.
+    """
+    if not artifact_path:
+        raise HTTPException(status_code=400, detail="artifact_path is required")
+
+    clean_path = artifact_path.lstrip('/')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    full_path = os.path.abspath(os.path.join(project_root, clean_path))
+
+    if not full_path.startswith(project_root):
+        raise HTTPException(status_code=403, detail="Invalid path: Path traversal is not allowed")
+
+    # Double check it belongs to one of the allowed directories
+    artifact_dirs = ["configs", "logs", "checkpoints", "checkpoints_finetune"]
+    allowed = False
+    for d in artifact_dirs:
+        if full_path.startswith(os.path.abspath(os.path.join(project_root, d))):
+            allowed = True
+            break
+
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Cannot access files outside of artifact directories")
+
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    if os.path.isdir(full_path):
+        raise HTTPException(status_code=400, detail="Cannot download a directory")
+
+    return FileResponse(path=full_path, filename=os.path.basename(full_path))
+
+
 @app.post("/api/delete_artifact", dependencies=[Depends(require_admin)])
 async def delete_artifact(req: DeleteArtifactRequest):
     """

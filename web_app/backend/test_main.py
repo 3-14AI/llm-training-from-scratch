@@ -202,6 +202,75 @@ def test_delete_artifact_not_found():
     assert "Artifact not found" in response.json()["detail"]
 
 
+def test_download_artifact_valid():
+    # create dummy file
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    temp_dir = os.path.join(project_root, "configs")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, "dummy_to_download.txt")
+    with open(temp_path, "wb") as f:
+        f.write(b"dummy content")
+
+    try:
+        rel_path = os.path.relpath(temp_path, project_root)
+
+        response = client.get(f"/api/download_artifact?artifact_path={rel_path}", headers=VIEWER_HEADERS)
+        assert response.status_code == 200
+        assert response.content == b"dummy content"
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def test_download_artifact_unauthorized():
+    response = client.get("/api/download_artifact?artifact_path=configs/test.txt")
+    assert response.status_code == 401
+
+def test_download_artifact_path_traversal():
+    response = client.get("/api/download_artifact?artifact_path=../../etc/passwd", headers=VIEWER_HEADERS)
+    assert response.status_code == 403
+    assert "Path traversal is not allowed" in response.json()["detail"]
+
+def test_download_artifact_outside_allowed_dirs():
+    # create dummy file outside of artifact dirs but inside project
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    temp_dir = os.path.join(project_root, "web_app")
+    temp_path = os.path.join(temp_dir, "dummy_to_download.txt")
+    with open(temp_path, "wb") as f:
+        f.write(b"dummy")
+
+    try:
+        rel_path = os.path.relpath(temp_path, project_root)
+
+        response = client.get(f"/api/download_artifact?artifact_path={rel_path}", headers=VIEWER_HEADERS)
+        assert response.status_code == 403
+        assert "Cannot access files outside of artifact directories" in response.json()["detail"]
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def test_download_artifact_not_found():
+    response = client.get("/api/download_artifact?artifact_path=configs/non_existent_file.txt", headers=VIEWER_HEADERS)
+    assert response.status_code == 404
+    assert "Artifact not found" in response.json()["detail"]
+
+def test_download_artifact_is_directory():
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    temp_dir = os.path.join(project_root, "configs", "dummy_dir")
+    os.makedirs(temp_dir, exist_ok=True)
+
+    try:
+        rel_path = os.path.relpath(temp_dir, project_root)
+        response = client.get(f"/api/download_artifact?artifact_path={rel_path}", headers=VIEWER_HEADERS)
+        assert response.status_code == 400
+        assert "Cannot download a directory" in response.json()["detail"]
+    finally:
+        if os.path.exists(temp_dir):
+            os.rmdir(temp_dir)
+
+
 @pytest.mark.asyncio
 def test_inference_valid():
     # Patch asyncio.create_subprocess_exec directly to mock the subprocess behavior
