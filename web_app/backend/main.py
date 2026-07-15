@@ -4,7 +4,7 @@ import subprocess
 from pydantic import BaseModel
 
 import asyncio
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, UploadFile, File, Form
 from fastapi.security import APIKeyHeader
 from typing import List
 
@@ -417,6 +417,41 @@ async def download_artifact(artifact_path: str):
         raise HTTPException(status_code=400, detail="Cannot download a directory")
 
     return FileResponse(path=full_path, filename=os.path.basename(full_path))
+
+
+@app.post("/api/upload_artifact", dependencies=[Depends(require_admin)])
+async def upload_artifact(
+    directory: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """
+    Uploads an artifact (file) to the specified directory.
+    """
+    if not directory or not file.filename:
+        raise HTTPException(status_code=400, detail="directory and file are required")
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+
+    # Check if the target directory is allowed
+    allowed_dirs = ["configs", "logs", "checkpoints", "checkpoints_finetune"]
+    if directory not in allowed_dirs:
+        raise HTTPException(status_code=403, detail="Cannot upload files outside of artifact directories")
+
+    target_dir = os.path.join(project_root, directory)
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir, exist_ok=True)
+
+    # Prevent path traversal in filename
+    clean_filename = os.path.basename(file.filename)
+    target_path = os.path.join(target_dir, clean_filename)
+
+    import shutil
+    try:
+        with open(target_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        return {"message": f"Artifact {clean_filename} uploaded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload artifact: {str(e)}")
 
 
 @app.post("/api/delete_artifact", dependencies=[Depends(require_admin)])
