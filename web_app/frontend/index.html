@@ -173,6 +173,22 @@
 
     <div id="artifacts-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
         <h3>Артефакты (Artifacts)</h3>
+
+        <div style="margin-bottom: 15px; padding: 10px; border: 1px dashed var(--tg-theme-hint-color, #ccc); border-radius: 4px;">
+            <h4>Upload Artifact</h4>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select id="upload-directory">
+                    <option value="configs">configs</option>
+                    <option value="logs">logs</option>
+                    <option value="checkpoints">checkpoints</option>
+                    <option value="checkpoints_finetune">checkpoints_finetune</option>
+                </select>
+                <input type="file" id="upload-file" style="flex-grow: 1;" />
+                <button onclick="uploadArtifact()" style="background-color: var(--tg-theme-button-color, #2980b9);">Upload</button>
+            </div>
+            <div id="upload-status" style="margin-top: 5px; font-size: 0.9em;"></div>
+        </div>
+
         <button onclick="loadArtifacts()">Load Artifacts</button>
         <div id="artifacts-list" style="margin-top: 15px; max-height: 300px; overflow-y: auto;">
             <p style="color: gray;">No artifacts loaded yet.</p>
@@ -522,6 +538,61 @@
             } catch (error) {
                 appendToTerminal(`Network Error: ${error.message}`, 'error');
                 document.getElementById('artifacts-list').innerHTML = `<p style="color: red;">Network Error: ${error.message}</p>`;
+            }
+        }
+
+        async function uploadArtifact() {
+            const directory = document.getElementById('upload-directory').value;
+            const fileInput = document.getElementById('upload-file');
+            const statusDiv = document.getElementById('upload-status');
+
+            if (fileInput.files.length === 0) {
+                statusDiv.textContent = 'Please select a file first.';
+                statusDiv.style.color = 'red';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('directory', directory);
+            formData.append('file', file);
+
+            statusDiv.textContent = `Uploading ${file.name} to ${directory}...`;
+            statusDiv.style.color = 'gray';
+            appendToTerminal(`> Uploading ${file.name} to ${directory}...`, 'command');
+
+            try {
+                // We cannot use fetchWithAuth directly because we need to send FormData
+                // and NOT set Content-Type to application/json.
+                // The browser will automatically set Content-Type with the boundary for FormData.
+                const apiKey = localStorage.getItem('apiKey');
+                const headers = {};
+                if (apiKey) {
+                    headers['X-API-Key'] = apiKey;
+                }
+
+                const response = await fetch('/api/upload_artifact', {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    statusDiv.textContent = data.message;
+                    statusDiv.style.color = 'green';
+                    appendToTerminal(data.message, 'command');
+                    fileInput.value = ''; // clear input
+                    loadArtifacts(); // refresh list
+                } else {
+                    statusDiv.textContent = `Error: ${data.detail}`;
+                    statusDiv.style.color = 'red';
+                    appendToTerminal(`Error uploading artifact: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                statusDiv.textContent = `Network Error: ${error.message}`;
+                statusDiv.style.color = 'red';
+                appendToTerminal(`Network Error during upload: ${error.message}`, 'error');
             }
         }
 

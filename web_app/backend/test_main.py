@@ -142,6 +142,66 @@ def test_get_artifacts():
     assert isinstance(data["artifacts"], list)
 
 
+def test_upload_artifact_valid():
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    temp_dir = os.path.join(project_root, "configs")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, "test_upload_file.txt")
+
+    # Ensure it doesn't exist before test
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+
+    try:
+        with open("dummy_local.txt", "wb") as f:
+            f.write(b"uploaded content")
+
+        with open("dummy_local.txt", "rb") as f:
+            files = {"file": ("test_upload_file.txt", f, "text/plain")}
+            data = {"directory": "configs"}
+            response = client.post("/api/upload_artifact", data=data, files=files, headers=ADMIN_HEADERS)
+
+        assert response.status_code == 200
+        assert "uploaded successfully" in response.json()["message"]
+        assert os.path.exists(temp_path)
+        with open(temp_path, "rb") as f:
+            assert f.read() == b"uploaded content"
+    finally:
+        if os.path.exists("dummy_local.txt"):
+            os.remove("dummy_local.txt")
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def test_upload_artifact_unauthorized():
+    with open("dummy_local.txt", "wb") as f:
+        f.write(b"content")
+
+    try:
+        with open("dummy_local.txt", "rb") as f:
+            files = {"file": ("test.txt", f, "text/plain")}
+            data = {"directory": "configs"}
+            response = client.post("/api/upload_artifact", data=data, files=files, headers=VIEWER_HEADERS)
+            assert response.status_code == 403
+    finally:
+        if os.path.exists("dummy_local.txt"):
+            os.remove("dummy_local.txt")
+
+def test_upload_artifact_invalid_directory():
+    with open("dummy_local.txt", "wb") as f:
+        f.write(b"content")
+
+    try:
+        with open("dummy_local.txt", "rb") as f:
+            files = {"file": ("test.txt", f, "text/plain")}
+            data = {"directory": "invalid_dir"}
+            response = client.post("/api/upload_artifact", data=data, files=files, headers=ADMIN_HEADERS)
+            assert response.status_code == 403
+            assert "Cannot upload files outside of artifact directories" in response.json()["detail"]
+    finally:
+        if os.path.exists("dummy_local.txt"):
+            os.remove("dummy_local.txt")
+
 def test_delete_artifact_valid():
     # create dummy file
     import os
