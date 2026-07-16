@@ -494,6 +494,66 @@ async def delete_artifact(req: DeleteArtifactRequest):
         raise HTTPException(status_code=500, detail=f"Failed to delete artifact: {str(e)}")
 
 
+@app.get("/api/datasets", dependencies=[Depends(get_current_user)])
+def get_datasets():
+    """
+    Возвращает список датасетов из директории data/ проекта.
+    """
+    import os
+    import time
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    data_dir = os.path.join(project_root, "data")
+
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir, exist_ok=True)
+
+    datasets = []
+
+    if os.path.exists(data_dir) and os.path.isdir(data_dir):
+        for root, _, files in os.walk(data_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, project_root)
+                stat = os.stat(file_path)
+
+                datasets.append({
+                    "name": file,
+                    "path": rel_path,
+                    "size": stat.st_size,
+                    "modified": time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(stat.st_mtime)),
+                    "type": "dataset"
+                })
+
+    return {"datasets": datasets}
+
+@app.post("/api/upload_dataset", dependencies=[Depends(require_admin)])
+async def upload_dataset(file: UploadFile = File(...)):
+    """
+    Uploads a dataset file to the data/ directory.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="file is required")
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    data_dir = os.path.join(project_root, "data")
+
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir, exist_ok=True)
+
+    # Prevent path traversal in filename
+    clean_filename = os.path.basename(file.filename)
+    target_path = os.path.join(data_dir, clean_filename)
+
+    import shutil
+    try:
+        with open(target_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        return {"message": f"Dataset {clean_filename} uploaded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload dataset: {str(e)}")
+
+
 @app.get("/api/artifacts", dependencies=[Depends(get_current_user)])
 def get_artifacts():
     """

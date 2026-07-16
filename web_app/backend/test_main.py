@@ -494,6 +494,54 @@ def test_quick_launch_valid_file():
         assert "Quick launch started" in response.json()["message"]
         mock_create_task.assert_called_once()
 
+def test_get_datasets_authorized():
+    response = client.get("/api/datasets", headers=VIEWER_HEADERS)
+    assert response.status_code == 200
+    assert "datasets" in response.json()
+    assert isinstance(response.json()["datasets"], list)
+
+def test_get_datasets_unauthorized():
+    response = client.get("/api/datasets")
+    assert response.status_code == 401
+
+def test_upload_dataset_authorized():
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    data_dir = os.path.join(project_root, "data")
+
+    # Ensure cleanup
+    test_file_path = os.path.join(data_dir, "test_dataset.txt")
+    if os.path.exists(test_file_path):
+        os.remove(test_file_path)
+
+    try:
+        response = client.post(
+            "/api/upload_dataset",
+            headers=ADMIN_HEADERS,
+            files={"file": ("test_dataset.txt", b"dummy dataset content")}
+        )
+        assert response.status_code == 200
+        assert "uploaded successfully" in response.json()["message"]
+        assert os.path.exists(test_file_path)
+    finally:
+        if os.path.exists(test_file_path):
+            os.remove(test_file_path)
+
+def test_upload_dataset_viewer_forbidden():
+    response = client.post(
+        "/api/upload_dataset",
+        headers=VIEWER_HEADERS,
+        files={"file": ("test_dataset.txt", b"dummy dataset content")}
+    )
+    assert response.status_code == 403
+
+def test_upload_dataset_unauthorized():
+    response = client.post(
+        "/api/upload_dataset",
+        files={"file": ("test_dataset.txt", b"dummy dataset content")}
+    )
+    assert response.status_code == 401
+
 def test_missing_auth():
     response = client.get("/api/configs")
     assert response.status_code == 401

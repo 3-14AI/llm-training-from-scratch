@@ -171,6 +171,22 @@
         <canvas id="metricsChart" width="400" height="200" style="margin-top: 15px; display: none;"></canvas>
     </div>
 
+    <div id="datasets-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
+        <h3>Датасеты (Datasets)</h3>
+
+        <div style="margin-bottom: 15px; padding: 10px; border: 1px dashed var(--tg-theme-hint-color, #ccc); border-radius: 4px;">
+            <h4>Upload Dataset</h4>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <input type="file" id="dataset-upload-file" />
+                <button onclick="uploadDataset()">Upload</button>
+            </div>
+            <div id="dataset-upload-status" style="margin-top: 5px; font-size: 14px;"></div>
+        </div>
+
+        <button onclick="loadDatasets()">Refresh Datasets</button>
+        <div id="datasets-list" style="margin-top: 10px;"></div>
+    </div>
+
     <div id="artifacts-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
         <h3>Артефакты (Artifacts)</h3>
 
@@ -303,6 +319,12 @@
                 document.getElementById('auth-status').style.color = 'green';
             }
             connectWebSocket();
+
+            // Auto-load data for dashboard sections
+            loadConfigs();
+            loadArtifacts();
+            loadDatasets();
+            loadMetrics();
         });
 
         async function loadConfigs() {
@@ -480,6 +502,89 @@
                 }
             } catch (error) {
                 appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadDatasets() {
+            const listDiv = document.getElementById('datasets-list');
+            listDiv.innerHTML = 'Loading datasets...';
+            try {
+                appendToTerminal('> Загрузка датасетов...', 'command');
+                const response = await fetchWithAuth('/api/datasets');
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.datasets && data.datasets.length > 0) {
+                        let html = '<ul style="list-style-type: none; padding: 0;">';
+                        data.datasets.forEach(a => {
+                            html += `<li style="margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong>${a.name}</strong> (${(a.size / 1024).toFixed(2)} KB)<br/>
+                                    <span style="font-size: 0.8em; color: gray;">Path: ${a.path} | Modified: ${a.modified}</span>
+                                </div>
+                            </li>`;
+                        });
+                        html += '</ul>';
+                        listDiv.innerHTML = html;
+                    } else {
+                        listDiv.innerHTML = 'No datasets found.';
+                    }
+                } else {
+                    listDiv.innerHTML = `<span style="color:red">Error: ${data.detail}</span>`;
+                }
+            } catch (error) {
+                listDiv.innerHTML = `<span style="color:red">Network Error: ${error.message}</span>`;
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function uploadDataset() {
+            const fileInput = document.getElementById('dataset-upload-file');
+            const statusDiv = document.getElementById('dataset-upload-status');
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                statusDiv.textContent = 'Please select a file to upload.';
+                statusDiv.style.color = 'red';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            statusDiv.textContent = `Uploading ${file.name}...`;
+            statusDiv.style.color = 'gray';
+            appendToTerminal(`> Uploading dataset ${file.name}...`, 'command');
+
+            try {
+                const apiKey = getApiKey();
+                const headers = {};
+                if (apiKey) {
+                    headers['X-API-Key'] = apiKey;
+                }
+
+                const response = await fetch('/api/upload_dataset', {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    statusDiv.textContent = data.message;
+                    statusDiv.style.color = 'green';
+                    appendToTerminal(data.message, 'command');
+                    fileInput.value = '';
+                    loadDatasets();
+                } else {
+                    statusDiv.textContent = `Error: ${data.detail}`;
+                    statusDiv.style.color = 'red';
+                    appendToTerminal(`Error uploading dataset: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                statusDiv.textContent = `Network Error: ${error.message}`;
+                statusDiv.style.color = 'red';
+                appendToTerminal(`Network Error uploading dataset: ${error.message}`, 'error');
             }
         }
 
