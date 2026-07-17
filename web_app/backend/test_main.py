@@ -542,6 +542,77 @@ def test_upload_dataset_unauthorized():
     )
     assert response.status_code == 401
 
+def test_delete_dataset_valid():
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    data_dir = os.path.join(project_root, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    temp_path = os.path.join(data_dir, "dummy_to_delete.txt")
+    with open(temp_path, "wb") as f:
+        f.write(b"dummy")
+
+    try:
+        rel_path = os.path.relpath(temp_path, project_root)
+        payload = {"dataset_path": rel_path}
+
+        response = client.post("/api/delete_dataset", json=payload, headers=ADMIN_HEADERS)
+        assert response.status_code == 200
+        assert "deleted successfully" in response.json()["message"]
+        assert not os.path.exists(temp_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def test_delete_dataset_unauthorized():
+    payload = {"dataset_path": "data/test.txt"}
+    response = client.post("/api/delete_dataset", json=payload, headers=VIEWER_HEADERS)
+    assert response.status_code == 403
+
+def test_delete_dataset_path_traversal():
+    payload = {"dataset_path": "../../etc/passwd"}
+    response = client.post("/api/delete_dataset", json=payload, headers=ADMIN_HEADERS)
+    assert response.status_code == 403
+    assert "Path traversal is not allowed" in response.json()["detail"]
+
+def test_delete_dataset_not_found():
+    payload = {"dataset_path": "data/non_existent_file.txt"}
+    response = client.post("/api/delete_dataset", json=payload, headers=ADMIN_HEADERS)
+    assert response.status_code == 404
+    assert "Dataset not found" in response.json()["detail"]
+
+def test_download_dataset_valid():
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    data_dir = os.path.join(project_root, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    temp_path = os.path.join(data_dir, "dummy_to_download.txt")
+    with open(temp_path, "wb") as f:
+        f.write(b"dummy content")
+
+    try:
+        rel_path = os.path.relpath(temp_path, project_root)
+
+        response = client.get(f"/api/download_dataset?dataset_path={rel_path}", headers=VIEWER_HEADERS)
+        assert response.status_code == 200
+        assert response.content == b"dummy content"
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def test_download_dataset_unauthorized():
+    response = client.get("/api/download_dataset?dataset_path=data/test.txt")
+    assert response.status_code == 401
+
+def test_download_dataset_path_traversal():
+    response = client.get("/api/download_dataset?dataset_path=../../etc/passwd", headers=VIEWER_HEADERS)
+    assert response.status_code == 403
+    assert "Path traversal is not allowed" in response.json()["detail"]
+
+def test_download_dataset_not_found():
+    response = client.get("/api/download_dataset?dataset_path=data/non_existent_file.txt", headers=VIEWER_HEADERS)
+    assert response.status_code == 404
+    assert "Dataset not found" in response.json()["detail"]
+
 def test_missing_auth():
     response = client.get("/api/configs")
     assert response.status_code == 401
