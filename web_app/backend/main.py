@@ -553,6 +553,69 @@ async def upload_dataset(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload dataset: {str(e)}")
 
+class DeleteDatasetRequest(BaseModel):
+    dataset_path: str = Field(..., description="Relative path of the dataset to delete")
+
+@app.post("/api/delete_dataset", dependencies=[Depends(require_admin)])
+async def delete_dataset(req: DeleteDatasetRequest):
+    """
+    Deletes a dataset.
+    """
+    if not req.dataset_path:
+        raise HTTPException(status_code=400, detail="dataset_path is required")
+
+    clean_path = req.dataset_path.lstrip('/')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    full_path = os.path.abspath(os.path.join(project_root, clean_path))
+
+    if not full_path.startswith(project_root):
+        raise HTTPException(status_code=403, detail="Invalid path: Path traversal is not allowed")
+
+    data_dir = os.path.abspath(os.path.join(project_root, "data"))
+    if not full_path.startswith(data_dir):
+        raise HTTPException(status_code=403, detail="Cannot delete files outside of data directory")
+
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    try:
+        if os.path.isdir(full_path):
+            import shutil
+            shutil.rmtree(full_path)
+        else:
+            os.remove(full_path)
+        return {"message": "Dataset deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete dataset: {str(e)}")
+
+
+@app.get("/api/download_dataset", dependencies=[Depends(get_current_user)])
+async def download_dataset(dataset_path: str):
+    """
+    Downloads a dataset file.
+    """
+    if not dataset_path:
+        raise HTTPException(status_code=400, detail="dataset_path is required")
+
+    clean_path = dataset_path.lstrip('/')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    full_path = os.path.abspath(os.path.join(project_root, clean_path))
+
+    if not full_path.startswith(project_root):
+        raise HTTPException(status_code=403, detail="Invalid path: Path traversal is not allowed")
+
+    data_dir = os.path.abspath(os.path.join(project_root, "data"))
+    if not full_path.startswith(data_dir):
+        raise HTTPException(status_code=403, detail="Cannot access files outside of data directory")
+
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    if os.path.isdir(full_path):
+        raise HTTPException(status_code=400, detail="Cannot download a directory")
+
+    return FileResponse(path=full_path, filename=os.path.basename(full_path))
+
 
 @app.get("/api/artifacts", dependencies=[Depends(get_current_user)])
 def get_artifacts():

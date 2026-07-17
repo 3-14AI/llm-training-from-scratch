@@ -515,17 +515,48 @@
 
                 if (response.ok) {
                     if (data.datasets && data.datasets.length > 0) {
-                        let html = '<ul style="list-style-type: none; padding: 0;">';
+                        listDiv.innerHTML = ''; // Clear previous content
+                        const ul = document.createElement('ul');
+                        ul.style.listStyleType = 'none';
+                        ul.style.padding = '0';
+
                         data.datasets.forEach(a => {
-                            html += `<li style="margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <strong>${a.name}</strong> (${(a.size / 1024).toFixed(2)} KB)<br/>
-                                    <span style="font-size: 0.8em; color: gray;">Path: ${a.path} | Modified: ${a.modified}</span>
-                                </div>
-                            </li>`;
+                            const li = document.createElement('li');
+                            li.style.marginBottom = '10px';
+                            li.style.padding = '10px';
+                            li.style.border = '1px solid #ddd';
+                            li.style.borderRadius = '4px';
+                            li.style.display = 'flex';
+                            li.style.justifyContent = 'space-between';
+                            li.style.alignItems = 'center';
+
+                            const infoDiv = document.createElement('div');
+                            infoDiv.innerHTML = `<strong>${a.name}</strong> (${(a.size / 1024).toFixed(2)} KB)<br/>
+                                                 <span style="font-size: 0.8em; color: gray;">Path: ${a.path} | Modified: ${a.modified}</span>`;
+
+                            const buttonsDiv = document.createElement('div');
+
+                            const downloadBtn = document.createElement('button');
+                            downloadBtn.textContent = 'Download';
+                            downloadBtn.style.backgroundColor = '#27ae60';
+                            downloadBtn.style.padding = '5px 10px';
+                            downloadBtn.style.marginRight = '5px';
+                            downloadBtn.onclick = () => downloadDataset(a.path);
+
+                            const deleteBtn = document.createElement('button');
+                            deleteBtn.textContent = 'Delete';
+                            deleteBtn.style.backgroundColor = '#e74c3c';
+                            deleteBtn.style.padding = '5px 10px';
+                            deleteBtn.onclick = () => deleteDataset(a.path);
+
+                            buttonsDiv.appendChild(downloadBtn);
+                            buttonsDiv.appendChild(deleteBtn);
+
+                            li.appendChild(infoDiv);
+                            li.appendChild(buttonsDiv);
+                            ul.appendChild(li);
                         });
-                        html += '</ul>';
-                        listDiv.innerHTML = html;
+                        listDiv.appendChild(ul);
                     } else {
                         listDiv.innerHTML = 'No datasets found.';
                     }
@@ -534,6 +565,61 @@
                 }
             } catch (error) {
                 listDiv.innerHTML = `<span style="color:red">Network Error: ${error.message}</span>`;
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function downloadDataset(datasetPath) {
+            appendToTerminal(`> Downloading dataset: ${datasetPath}...`, 'command');
+            try {
+                const response = await fetchWithAuth(`/api/download_dataset?dataset_path=${encodeURIComponent(datasetPath)}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    const filename = datasetPath.split('/').pop();
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    appendToTerminal(`Downloaded ${filename} successfully`, 'command');
+                } else {
+                    const errorText = await response.text();
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        appendToTerminal(`Error downloading dataset: ${errorJson.detail}`, 'error');
+                    } catch (e) {
+                        appendToTerminal(`Error downloading dataset: ${response.status} ${response.statusText}`, 'error');
+                    }
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteDataset(datasetPath) {
+            if (!confirm(`Are you sure you want to delete dataset ${datasetPath}?`)) {
+                return;
+            }
+
+            appendToTerminal(`> Deleting dataset: ${datasetPath}...`, 'command');
+            try {
+                const response = await fetchWithAuth('/api/delete_dataset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dataset_path: datasetPath })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    appendToTerminal(data.message, 'command');
+                    loadDatasets(); // Refresh the list
+                } else {
+                    appendToTerminal(`Error deleting dataset: ${data.detail}`, 'error');
+                }
+            } catch (error) {
                 appendToTerminal(`Network Error: ${error.message}`, 'error');
             }
         }
