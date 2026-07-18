@@ -580,6 +580,41 @@ def test_delete_dataset_not_found():
     assert response.status_code == 404
     assert "Dataset not found" in response.json()["detail"]
 
+def test_preview_dataset_valid():
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    data_dir = os.path.join(project_root, "data")
+    os.makedirs(data_dir, exist_ok=True)
+    temp_path = os.path.join(data_dir, "dummy_to_preview.txt")
+    with open(temp_path, "w", encoding="utf-8") as f:
+        f.write("line 1\nline 2\nline 3\n")
+
+    try:
+        rel_path = os.path.relpath(temp_path, project_root)
+        response = client.get(f"/api/preview_dataset?dataset_path={rel_path}&lines=2", headers=VIEWER_HEADERS)
+        assert response.status_code == 200
+        data = response.json()
+        assert "preview" in data
+        assert data["preview"] == "line 1\nline 2"
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+def test_preview_dataset_unauthorized():
+    response = client.get("/api/preview_dataset?dataset_path=data/test.txt")
+    assert response.status_code == 401
+
+def test_preview_dataset_path_traversal():
+    response = client.get("/api/preview_dataset?dataset_path=../../etc/passwd", headers=VIEWER_HEADERS)
+    assert response.status_code == 403
+    assert "Path traversal is not allowed" in response.json()["detail"]
+
+def test_preview_dataset_not_found():
+    response = client.get("/api/preview_dataset?dataset_path=data/non_existent_file.txt", headers=VIEWER_HEADERS)
+    assert response.status_code == 404
+    assert "Dataset not found" in response.json()["detail"]
+
+
 def test_download_dataset_valid():
     import os
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
