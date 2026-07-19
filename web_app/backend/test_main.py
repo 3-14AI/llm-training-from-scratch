@@ -39,7 +39,8 @@ def test_execute_invalid_shlex():
     assert "Invalid command format" in response.json()["detail"]
 
 from fastapi.websockets import WebSocketDisconnect
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
+from web_app.backend.main import active_processes
 import pytest
 
 def test_run_script_valid():
@@ -662,3 +663,39 @@ def test_invalid_auth():
 def test_viewer_access_admin_endpoint():
     response = client.post("/api/execute", json={"command": "echo Hello"}, headers=VIEWER_HEADERS)
     assert response.status_code == 403
+
+def test_run_script_already_running():
+    active_processes["pretraining"] = MagicMock()
+    try:
+        with patch("web_app.backend.main.asyncio.create_task"):
+            response = client.post("/api/run_script", json={"script_type": "pretraining"}, headers=ADMIN_HEADERS)
+            assert response.status_code == 400
+            assert "already running" in response.json()["detail"]
+    finally:
+        del active_processes["pretraining"]
+
+def test_get_active_scripts():
+    active_processes["finetuning"] = MagicMock()
+    try:
+        response = client.get("/api/active_scripts", headers=ADMIN_HEADERS)
+        assert response.status_code == 200
+        assert "finetuning" in response.json()["active_scripts"]
+    finally:
+        del active_processes["finetuning"]
+
+def test_stop_script_valid():
+    mock_process = MagicMock()
+    active_processes["evaluation"] = mock_process
+    try:
+        response = client.post("/api/stop_script", json={"script_type": "evaluation"}, headers=ADMIN_HEADERS)
+        assert response.status_code == 200
+        assert "Sent termination signal" in response.json()["message"]
+        mock_process.terminate.assert_called_once()
+    finally:
+        if "evaluation" in active_processes:
+            del active_processes["evaluation"]
+
+def test_stop_script_not_running():
+    response = client.post("/api/stop_script", json={"script_type": "nonexistent"}, headers=ADMIN_HEADERS)
+    assert response.status_code == 404
+    assert "not running" in response.json()["detail"]

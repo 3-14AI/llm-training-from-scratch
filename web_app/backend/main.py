@@ -108,6 +108,8 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+active_processes = {}
+
 @app.websocket("/ws/logs")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
     if not token or token not in TOKENS:
@@ -121,12 +123,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-async def run_process_and_broadcast(command_parts: List[str]):
+async def run_process_and_broadcast(script_type: str, command_parts: List[str]):
     process = await asyncio.create_subprocess_exec(
         *command_parts,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
     )
+    active_processes[script_type] = process
 
     async def read_stream(stream, prefix):
         while True:
@@ -141,7 +144,9 @@ async def run_process_and_broadcast(command_parts: List[str]):
         read_stream(process.stderr, "STDERR")
     )
     await process.wait()
-    await manager.broadcast(f"[SYSTEM] Process finished with exit code {process.returncode}")
+    if script_type in active_processes:
+        del active_processes[script_type]
+    await manager.broadcast(f"[SYSTEM] Process {script_type} finished with exit code {process.returncode}")
 
 
 @app.post("/api/run_script", dependencies=[Depends(require_admin)])
@@ -155,12 +160,44 @@ async def run_script(req: ScriptRequest):
     if req.script_type not in scripts:
         raise HTTPException(status_code=400, detail=f"Unknown script type: {req.script_type}")
 
+    if req.script_type in active_processes:
+        raise HTTPException(status_code=400, detail=f"Script {req.script_type} is already running.")
+
     command_parts = scripts[req.script_type]
 
     # Run the process in the background
-    asyncio.create_task(run_process_and_broadcast(command_parts))
+    asyncio.create_task(run_process_and_broadcast(req.script_type, command_parts))
 
     return {"message": f"Started {req.script_type} script in the background."}
+
+
+@app.get("/api/active_scripts", dependencies=[Depends(get_current_user)])
+async def get_active_scripts():
+    """
+    Returns a list of currently running scripts.
+    """
+    return {"active_scripts": list(active_processes.keys())}
+
+class StopScriptRequest(BaseModel):
+    script_type: str
+
+@app.post("/api/stop_script", dependencies=[Depends(require_admin)])
+async def stop_script(req: StopScriptRequest):
+    """
+    Stops a running script.
+    """
+    if req.script_type not in active_processes:
+        raise HTTPException(status_code=404, detail=f"Script {req.script_type} is not running.")
+
+    process = active_processes[req.script_type]
+    try:
+        process.terminate()
+        # The wait() in run_process_and_broadcast will handle removal and broadcasting
+        return {"message": f"Sent termination signal to {req.script_type}."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to stop script: {str(e)}")
+
+
 
 
 class QuickLaunchRequest(BaseModel):
@@ -212,7 +249,7 @@ async def quick_launch(req: QuickLaunchRequest):
         command_parts = ["python", "scripts/experiment_runner.py", "--exp_name", req.config_name]
 
     # Запускаем в бэкграунде
-    asyncio.create_task(run_process_and_broadcast(command_parts))
+    asyncio.create_task(run_process_and_broadcast(f"quick_launch_{req.config_name}", command_parts))
 
     return {"message": f"Quick launch started for config: {req.config_name}"}
 

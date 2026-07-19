@@ -163,6 +163,14 @@
             <button onclick="runInference()" style="background-color: var(--tg-theme-button-color, #9b59b6); width: fit-content;">Generate</button>
             <div id="inference-output" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; min-height: 50px; background-color: #fff; color: #000; white-space: pre-wrap;"></div>
         </div>
+
+    <div id="active-scripts-container" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: var(--tg-theme-bg-color, #f9f9f9);">
+        <h3>Active Scripts</h3>
+        <ul id="active-scripts-list" style="list-style-type: none; padding-left: 0;">
+            <li>Loading...</li>
+        </ul>
+    </div>
+
     </div>
 
     <div id="metrics-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
@@ -394,6 +402,71 @@
             }
         }
 
+
+        async function updateActiveScripts() {
+            try {
+                const response = await fetchWithAuth('/api/active_scripts');
+                const data = await response.json();
+                const listEl = document.getElementById('active-scripts-list');
+
+                if (response.ok) {
+                    listEl.innerHTML = '';
+                    if (data.active_scripts.length === 0) {
+                        listEl.innerHTML = '<li>No active scripts.</li>';
+                    } else {
+                        data.active_scripts.forEach(script => {
+                            const li = document.createElement('li');
+                            li.style.display = 'flex';
+                            li.style.justifyContent = 'space-between';
+                            li.style.alignItems = 'center';
+                            li.style.marginBottom = '5px';
+                            li.style.padding = '5px';
+                            li.style.backgroundColor = '#ecf0f1';
+                            li.style.borderRadius = '3px';
+
+                            const span = document.createElement('span');
+                            span.textContent = script;
+                            span.style.color = '#2c3e50';
+
+                            const stopBtn = document.createElement('button');
+                            stopBtn.textContent = 'Stop';
+                            stopBtn.style.backgroundColor = '#e74c3c';
+                            stopBtn.style.padding = '5px 10px';
+                            stopBtn.onclick = () => stopScript(script);
+
+                            li.appendChild(span);
+                            li.appendChild(stopBtn);
+                            listEl.appendChild(li);
+                        });
+                    }
+                } else {
+                    listEl.innerHTML = `<li style="color:red">Error: ${data.detail}</li>`;
+                }
+            } catch (error) {
+                console.error("Failed to update active scripts", error);
+            }
+        }
+
+        async function stopScript(scriptType) {
+            appendToTerminal(`> Stopping script: ${scriptType}...`, 'command');
+            try {
+                const response = await fetchWithAuth('/api/stop_script', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script_type: scriptType })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    appendToTerminal(data.message, 'command');
+                    setTimeout(updateActiveScripts, 1000); // refresh shortly after
+                } else {
+                    appendToTerminal(`Error stopping script: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
+
         async function runScript(scriptType) {
             appendToTerminal(`> Starting script: ${scriptType}...`, 'command');
             try {
@@ -410,6 +483,7 @@
                     appendToTerminal(`Error starting script: ${data.detail}`, 'error');
                 } else {
                     appendToTerminal(`Process started: ${data.message}`, 'command');
+                    setTimeout(updateActiveScripts, 1000);
                 }
             } catch (error) {
                 appendToTerminal(`Network Error: ${error.message}`, 'error');
