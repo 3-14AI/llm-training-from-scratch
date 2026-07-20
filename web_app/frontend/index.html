@@ -171,6 +171,12 @@
         </ul>
     </div>
 
+    <div id="system-stats-container" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: var(--tg-theme-bg-color, #f9f9f9);">
+        <h3>System Stats</h3>
+        <button onclick="loadSystemStats()" style="margin-bottom: 10px;">Refresh Stats</button>
+        <div id="system-stats-output" style="font-family: monospace; white-space: pre-wrap; color: var(--tg-theme-text-color, #000000);">Loading stats...</div>
+    </div>
+
     </div>
 
     <div id="metrics-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
@@ -333,6 +339,8 @@
             loadArtifacts();
             loadDatasets();
             loadMetrics();
+            loadSystemStats();
+            updateActiveScripts();
         });
 
         async function loadConfigs() {
@@ -402,6 +410,22 @@
             }
         }
 
+
+        async function loadSystemStats() {
+            const outputDiv = document.getElementById('system-stats-output');
+            outputDiv.textContent = 'Refreshing...';
+            try {
+                const response = await fetchWithAuth('/api/system_stats');
+                const data = await response.json();
+                if (response.ok) {
+                    outputDiv.textContent = `CPU Usage: ${data.cpu_percent}%\nRAM Usage: ${data.ram_percent}% (${data.ram_used_mb} MB / ${data.ram_total_mb} MB)`;
+                } else {
+                    outputDiv.textContent = `Error: ${data.detail}`;
+                }
+            } catch (error) {
+                outputDiv.textContent = `Network Error: ${error.message}`;
+            }
+        }
 
         async function updateActiveScripts() {
             try {

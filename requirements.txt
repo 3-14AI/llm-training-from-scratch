@@ -14,3 +14,4 @@ tokenizers
 lm-eval
 transformers
 pytest-asyncio
+psutil

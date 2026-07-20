@@ -699,3 +699,16 @@ def test_stop_script_not_running():
     response = client.post("/api/stop_script", json={"script_type": "nonexistent"}, headers=ADMIN_HEADERS)
     assert response.status_code == 404
     assert "not running" in response.json()["detail"]
+
+def test_system_stats_authorized():
+    response = client.get("/api/system_stats", headers=VIEWER_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    assert "cpu_percent" in data
+    assert "ram_percent" in data
+    assert "ram_used_mb" in data
+    assert "ram_total_mb" in data
+
+def test_system_stats_unauthorized():
+    response = client.get("/api/system_stats")
+    assert response.status_code == 401
