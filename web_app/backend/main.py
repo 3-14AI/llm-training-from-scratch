@@ -729,6 +729,26 @@ def get_artifacts():
 def health_check():
     return {"status": "ok"}
 
+import psutil
+
+@app.get("/api/system_stats", dependencies=[Depends(get_current_user)])
+def get_system_stats():
+    """
+    Returns current system resource usage (CPU and RAM).
+    """
+    try:
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory()
+        return {
+            "cpu_percent": cpu_percent,
+            "ram_percent": mem.percent,
+            "ram_used_mb": round(mem.used / (1024 * 1024), 2),
+            "ram_total_mb": round(mem.total / (1024 * 1024), 2)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get system stats: {str(e)}")
+
+
 # Construct absolute path for the frontend directory based on the location of main.py
 frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend")
 app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
