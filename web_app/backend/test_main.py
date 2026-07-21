@@ -708,6 +708,9 @@ def test_system_stats_authorized():
     assert "ram_percent" in data
     assert "ram_used_mb" in data
     assert "ram_total_mb" in data
+    assert "disk_percent" in data
+    assert "disk_used_gb" in data
+    assert "disk_total_gb" in data
 
 def test_system_stats_unauthorized():
     response = client.get("/api/system_stats")
