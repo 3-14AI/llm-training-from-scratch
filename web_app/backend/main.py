@@ -734,16 +734,23 @@ import psutil
 @app.get("/api/system_stats", dependencies=[Depends(get_current_user)])
 def get_system_stats():
     """
-    Returns current system resource usage (CPU and RAM).
+    Returns current system resource usage (CPU, RAM, and Disk).
     """
     try:
         cpu_percent = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory()
+
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+        disk = psutil.disk_usage(project_root)
+
         return {
             "cpu_percent": cpu_percent,
             "ram_percent": mem.percent,
             "ram_used_mb": round(mem.used / (1024 * 1024), 2),
-            "ram_total_mb": round(mem.total / (1024 * 1024), 2)
+            "ram_total_mb": round(mem.total / (1024 * 1024), 2),
+            "disk_percent": disk.percent,
+            "disk_used_gb": round(disk.used / (1024 * 1024 * 1024), 2),
+            "disk_total_gb": round(disk.total / (1024 * 1024 * 1024), 2)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get system stats: {str(e)}")
