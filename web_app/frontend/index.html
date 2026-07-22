@@ -418,7 +418,7 @@
                 const response = await fetchWithAuth('/api/system_stats');
                 const data = await response.json();
                 if (response.ok) {
-                    outputDiv.textContent = `CPU Usage: ${data.cpu_percent}%\nRAM Usage: ${data.ram_percent}% (${data.ram_used_mb} MB / ${data.ram_total_mb} MB)\nDisk Usage: ${data.disk_percent}% (${data.disk_used_gb} GB / ${data.disk_total_gb} GB)`;
+                    outputDiv.textContent = `CPU Usage: ${data.cpu_percent}%\nRAM Usage: ${data.ram_percent}% (${data.ram_used_mb} MB / ${data.ram_total_mb} MB)\nDisk Usage: ${data.disk_percent}% (${data.disk_used_gb} GB / ${data.disk_total_gb} GB)\nNetwork Stats: ${data.network_sent_mb} MB Sent / ${data.network_recv_mb} MB Recv`;
                 } else {
                     outputDiv.textContent = `Error: ${data.detail}`;
                 }

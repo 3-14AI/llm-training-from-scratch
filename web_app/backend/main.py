@@ -743,6 +743,8 @@ def get_system_stats():
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
         disk = psutil.disk_usage(project_root)
 
+        net = psutil.net_io_counters()
+
         return {
             "cpu_percent": cpu_percent,
             "ram_percent": mem.percent,
@@ -750,7 +752,9 @@ def get_system_stats():
             "ram_total_mb": round(mem.total / (1024 * 1024), 2),
             "disk_percent": disk.percent,
             "disk_used_gb": round(disk.used / (1024 * 1024 * 1024), 2),
-            "disk_total_gb": round(disk.total / (1024 * 1024 * 1024), 2)
+            "disk_total_gb": round(disk.total / (1024 * 1024 * 1024), 2),
+            "network_sent_mb": round(net.bytes_sent / (1024 * 1024), 2),
+            "network_recv_mb": round(net.bytes_recv / (1024 * 1024), 2)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get system stats: {str(e)}")
