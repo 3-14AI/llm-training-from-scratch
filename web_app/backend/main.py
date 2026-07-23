@@ -731,6 +731,8 @@ def health_check():
 
 import psutil
 
+import time
+
 @app.get("/api/system_stats", dependencies=[Depends(get_current_user)])
 def get_system_stats():
     """
@@ -745,6 +747,11 @@ def get_system_stats():
 
         net = psutil.net_io_counters()
 
+        boot_time = psutil.boot_time()
+        uptime_seconds = round(time.time() - boot_time, 2)
+
+        disk_io = psutil.disk_io_counters()
+
         return {
             "cpu_percent": cpu_percent,
             "ram_percent": mem.percent,
@@ -754,7 +761,10 @@ def get_system_stats():
             "disk_used_gb": round(disk.used / (1024 * 1024 * 1024), 2),
             "disk_total_gb": round(disk.total / (1024 * 1024 * 1024), 2),
             "network_sent_mb": round(net.bytes_sent / (1024 * 1024), 2),
-            "network_recv_mb": round(net.bytes_recv / (1024 * 1024), 2)
+            "network_recv_mb": round(net.bytes_recv / (1024 * 1024), 2),
+            "uptime_seconds": uptime_seconds,
+            "disk_read_mb": round(disk_io.read_bytes / (1024 * 1024), 2),
+            "disk_write_mb": round(disk_io.write_bytes / (1024 * 1024), 2)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get system stats: {str(e)}")
