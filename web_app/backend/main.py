@@ -752,6 +752,8 @@ def get_system_stats():
 
         disk_io = psutil.disk_io_counters()
 
+        swap = psutil.swap_memory()
+
         return {
             "cpu_percent": cpu_percent,
             "ram_percent": mem.percent,
@@ -764,7 +766,10 @@ def get_system_stats():
             "network_recv_mb": round(net.bytes_recv / (1024 * 1024), 2),
             "uptime_seconds": uptime_seconds,
             "disk_read_mb": round(disk_io.read_bytes / (1024 * 1024), 2),
-            "disk_write_mb": round(disk_io.write_bytes / (1024 * 1024), 2)
+            "disk_write_mb": round(disk_io.write_bytes / (1024 * 1024), 2),
+            "swap_percent": swap.percent,
+            "swap_used_mb": round(swap.used / (1024 * 1024), 2),
+            "swap_total_mb": round(swap.total / (1024 * 1024), 2)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get system stats: {str(e)}")

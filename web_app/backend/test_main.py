@@ -716,6 +716,9 @@ def test_system_stats_authorized():
     assert "uptime_seconds" in data
     assert "disk_read_mb" in data
     assert "disk_write_mb" in data
+    assert "swap_percent" in data
+    assert "swap_used_mb" in data
+    assert "swap_total_mb" in data
 
 def test_system_stats_unauthorized():
     response = client.get("/api/system_stats")
