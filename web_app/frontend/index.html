@@ -165,7 +165,10 @@
         </div>
 
     <div id="active-scripts-container" style="margin-top: 20px; border: 1px solid #ccc; border-radius: 5px; padding: 10px; background-color: var(--tg-theme-bg-color, #f9f9f9);">
-        <h3>Active Scripts</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>Active Scripts</h3>
+            <button id="stop-all-btn" onclick="stopAllScripts()" style="background-color: var(--tg-theme-button-color, #e74c3c); padding: 5px 15px;">Stop All</button>
+        </div>
         <ul id="active-scripts-list" style="list-style-type: none; padding-left: 0;">
             <li>Loading...</li>
         </ul>
@@ -404,6 +407,27 @@
                     appendToTerminal(`Error: ${data.detail}`, 'error');
                 } else {
                     appendToTerminal(data.message, 'command');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function stopAllScripts() {
+            if (!confirm(`Are you sure you want to stop all active scripts?`)) {
+                return;
+            }
+            appendToTerminal(`> Stopping all scripts...`, 'command');
+            try {
+                const response = await fetchWithAuth('/api/stop_all_scripts', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    appendToTerminal(data.message, 'command');
+                    setTimeout(updateActiveScripts, 1000); // refresh shortly after
+                } else {
+                    appendToTerminal(`Error stopping scripts: ${data.detail}`, 'error');
                 }
             } catch (error) {
                 appendToTerminal(`Network Error: ${error.message}`, 'error');
