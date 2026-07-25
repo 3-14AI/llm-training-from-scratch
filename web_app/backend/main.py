@@ -198,6 +198,28 @@ async def stop_script(req: StopScriptRequest):
         raise HTTPException(status_code=500, detail=f"Failed to stop script: {str(e)}")
 
 
+@app.post("/api/stop_all_scripts", dependencies=[Depends(require_admin)])
+async def stop_all_scripts():
+    """
+    Stops all currently running scripts.
+    """
+    if not active_processes:
+        return {"message": "No active scripts to stop.", "stopped": []}
+
+    stopped_scripts = []
+    errors = []
+
+    for script_type, process in list(active_processes.items()):
+        try:
+            process.terminate()
+            stopped_scripts.append(script_type)
+        except Exception as e:
+            errors.append(f"Failed to stop {script_type}: {str(e)}")
+
+    if errors:
+        raise HTTPException(status_code=500, detail="; ".join(errors))
+
+    return {"message": f"Sent termination signal to {len(stopped_scripts)} scripts.", "stopped": stopped_scripts}
 
 
 class QuickLaunchRequest(BaseModel):

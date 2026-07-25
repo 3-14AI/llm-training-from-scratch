@@ -700,6 +700,37 @@ def test_stop_script_not_running():
     assert response.status_code == 404
     assert "not running" in response.json()["detail"]
 
+def test_stop_all_scripts_valid():
+    mock_process1 = MagicMock()
+    mock_process2 = MagicMock()
+    active_processes["script1"] = mock_process1
+    active_processes["script2"] = mock_process2
+    try:
+        response = client.post("/api/stop_all_scripts", headers=ADMIN_HEADERS)
+        assert response.status_code == 200
+        data = response.json()
+        assert "Sent termination signal to 2 scripts." in data["message"]
+        assert "script1" in data["stopped"]
+        assert "script2" in data["stopped"]
+        mock_process1.terminate.assert_called_once()
+        mock_process2.terminate.assert_called_once()
+    finally:
+        if "script1" in active_processes:
+            del active_processes["script1"]
+        if "script2" in active_processes:
+            del active_processes["script2"]
+
+def test_stop_all_scripts_empty():
+    response = client.post("/api/stop_all_scripts", headers=ADMIN_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    assert "No active scripts to stop." in data["message"]
+    assert len(data["stopped"]) == 0
+
+def test_stop_all_scripts_unauthorized():
+    response = client.post("/api/stop_all_scripts", headers=VIEWER_HEADERS)
+    assert response.status_code == 403
+
 def test_system_stats_authorized():
     response = client.get("/api/system_stats", headers=VIEWER_HEADERS)
     assert response.status_code == 200

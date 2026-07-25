@@ -12,7 +12,7 @@
   - На фронтенде добавить отображение этих метрик в блоке "System Stats".
 
 ### Шаг 20: Bulk Script Management
- - [ ] **Bulk Script Management:**
+ - [x] **Bulk Script Management:**
   - Добавить эндпоинт `/api/stop_all_scripts` для остановки всех активных скриптов сразу.
   - Добавить тесты для проверки функционала.
   - На фронтенде добавить кнопку "Stop All" рядом со списком "Active Scripts".
