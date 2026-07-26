@@ -731,6 +731,45 @@ def test_stop_all_scripts_unauthorized():
     response = client.post("/api/stop_all_scripts", headers=VIEWER_HEADERS)
     assert response.status_code == 403
 
+def test_clear_logs_authorized(tmp_path, monkeypatch):
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    (logs_dir / "test1.log").write_text("test")
+    sub_dir = logs_dir / "subdir"
+    sub_dir.mkdir()
+    (sub_dir / "test2.log").write_text("test")
+
+    # Mock project root to tmp_path
+    original_abspath = os.path.abspath
+    monkeypatch.setattr("os.path.abspath", lambda x: str(tmp_path) if "../../" in x else original_abspath(x))
+
+    response = client.post("/api/clear_logs", headers=ADMIN_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Логи успешно очищены."
+    assert data["deleted_count"] == 2
+    assert not (logs_dir / "test1.log").exists()
+    assert not sub_dir.exists()
+    assert logs_dir.exists()
+
+def test_clear_logs_empty(tmp_path, monkeypatch):
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+
+    # Mock project root to tmp_path
+    original_abspath = os.path.abspath
+    monkeypatch.setattr("os.path.abspath", lambda x: str(tmp_path) if "../../" in x else original_abspath(x))
+
+    response = client.post("/api/clear_logs", headers=ADMIN_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Логи успешно очищены."
+    assert data["deleted_count"] == 0
+
+def test_clear_logs_unauthorized():
+    response = client.post("/api/clear_logs", headers=VIEWER_HEADERS)
+    assert response.status_code == 403
+
 def test_system_stats_authorized():
     response = client.get("/api/system_stats", headers=VIEWER_HEADERS)
     assert response.status_code == 200

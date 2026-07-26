@@ -222,7 +222,10 @@
             <div id="upload-status" style="margin-top: 5px; font-size: 0.9em;"></div>
         </div>
 
-        <button onclick="loadArtifacts()">Load Artifacts</button>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button onclick="loadArtifacts()">Load Artifacts</button>
+            <button onclick="clearLogs()" style="background-color: #c0392b;">Clear Logs</button>
+        </div>
         <div id="artifacts-list" style="margin-top: 15px; max-height: 300px; overflow-y: auto;">
             <p style="color: gray;">No artifacts loaded yet.</p>
         </div>
@@ -817,6 +820,27 @@
                 statusDiv.textContent = `Network Error: ${error.message}`;
                 statusDiv.style.color = 'red';
                 appendToTerminal(`Network Error uploading dataset: ${error.message}`, 'error');
+            }
+        }
+
+        async function clearLogs() {
+            if (!confirm("Вы уверены, что хотите удалить все логи? Это действие нельзя отменить.")) {
+                return;
+            }
+            appendToTerminal('> Очистка логов...', 'command');
+            try {
+                const response = await fetchWithAuth('/api/clear_logs', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    appendToTerminal(data.message + ` Удалено файлов/папок: ${data.deleted_count}`, 'command');
+                    loadArtifacts();
+                } else {
+                    appendToTerminal(`Ошибка очистки логов: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
             }
         }
 
