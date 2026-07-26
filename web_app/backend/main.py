@@ -714,6 +714,40 @@ async def download_dataset(dataset_path: str):
     return FileResponse(path=full_path, filename=os.path.basename(full_path))
 
 
+@app.post("/api/clear_logs", dependencies=[Depends(require_admin)])
+async def clear_logs():
+    """
+    Очищает директорию логов, удаляя все файлы и вложенные директории.
+    """
+    import os
+    import shutil
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    logs_dir = os.path.join(project_root, "logs")
+
+    if not os.path.exists(logs_dir):
+        return {"message": "Директория логов не найдена, нечего очищать.", "deleted_count": 0}
+
+    deleted_count = 0
+    errors = []
+
+    for item in os.listdir(logs_dir):
+        item_path = os.path.join(logs_dir, item)
+        try:
+            if os.path.isfile(item_path) or os.path.islink(item_path):
+                os.unlink(item_path)
+            elif os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+            deleted_count += 1
+        except Exception as e:
+            errors.append(f"Ошибка при удалении {item}: {str(e)}")
+
+    if errors:
+        raise HTTPException(status_code=500, detail="; ".join(errors))
+
+    return {"message": "Логи успешно очищены.", "deleted_count": deleted_count}
+
+
 @app.get("/api/artifacts", dependencies=[Depends(get_current_user)])
 def get_artifacts():
     """
