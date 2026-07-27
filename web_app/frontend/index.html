@@ -229,6 +229,12 @@
         <div id="artifacts-list" style="margin-top: 15px; max-height: 300px; overflow-y: auto;">
             <p style="color: gray;">No artifacts loaded yet.</p>
         </div>
+
+        <div id="artifact-preview-container" style="display: none; margin-top: 15px;">
+            <h4>Предпросмотр: <span id="preview-filename"></span></h4>
+            <button onclick="document.getElementById('artifact-preview-container').style.display='none';" style="margin-bottom: 5px; padding: 2px 8px;">Close</button>
+            <pre id="preview-content" style="background-color: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; font-size: 0.9em; max-height: 300px; overflow-y: auto; color: black;"></pre>
+        </div>
     </div>
 
     <div id="export-container" style="padding: 15px; margin: 15px 0; border: 1px solid var(--tg-theme-hint-color, #ccc); border-radius: 8px;">
@@ -883,9 +889,18 @@
                             downloadBtn.style.marginLeft = '5px';
                             downloadBtn.onclick = () => downloadArtifact(item.path);
 
+                            const previewBtn = document.createElement('button');
+                            previewBtn.textContent = 'Preview';
+                            previewBtn.style.backgroundColor = '#f39c12';
+                            previewBtn.style.padding = '2px 8px';
+                            previewBtn.style.marginTop = '5px';
+                            previewBtn.style.marginLeft = '5px';
+                            previewBtn.onclick = () => previewArtifact(item.path);
+
                             li.appendChild(contentDiv);
                             li.appendChild(deleteBtn);
                             li.appendChild(downloadBtn);
+                            li.appendChild(previewBtn);
                             ul.appendChild(li);
                         });
                         listContainer.appendChild(ul);
@@ -954,6 +969,30 @@
                 statusDiv.textContent = `Network Error: ${error.message}`;
                 statusDiv.style.color = 'red';
                 appendToTerminal(`Network Error during upload: ${error.message}`, 'error');
+            }
+        }
+
+        async function previewArtifact(artifactPath) {
+            appendToTerminal(`> Предпросмотр артефакта: ${artifactPath}...`, 'command');
+            try {
+                const response = await fetchWithAuth(`/api/preview_artifact?artifact_path=${encodeURIComponent(artifactPath)}&lines=50`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    const previewContainer = document.getElementById('artifact-preview-container');
+                    const previewFilename = document.getElementById('preview-filename');
+                    const previewContent = document.getElementById('preview-content');
+
+                    previewFilename.textContent = artifactPath;
+                    previewContent.textContent = data.preview || 'File is empty.';
+                    previewContainer.style.display = 'block';
+
+                    appendToTerminal(`Предпросмотр ${artifactPath} загружен.`, 'command');
+                } else {
+                    appendToTerminal(`Ошибка предпросмотра: ${data.detail}`, 'error');
+                }
+            } catch (error) {
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
             }
         }
 

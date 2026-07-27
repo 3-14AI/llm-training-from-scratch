@@ -443,6 +443,53 @@ class DeleteArtifactRequest(BaseModel):
 
 from fastapi.responses import FileResponse
 
+@app.get("/api/preview_artifact", dependencies=[Depends(get_current_user)])
+async def preview_artifact(artifact_path: str, lines: int = 50):
+    """
+    Returns a preview (first N lines) of a text artifact file.
+    """
+    if not artifact_path:
+        raise HTTPException(status_code=400, detail="artifact_path is required")
+
+    clean_path = artifact_path.lstrip('/')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    full_path = os.path.abspath(os.path.join(project_root, clean_path))
+
+    if not full_path.startswith(project_root):
+        raise HTTPException(status_code=403, detail="Invalid path: Path traversal is not allowed")
+
+    allowed_dirs = [
+        os.path.join(project_root, "configs"),
+        os.path.join(project_root, "logs"),
+        os.path.join(project_root, "checkpoints"),
+        os.path.join(project_root, "checkpoints_finetune"),
+        os.path.join(project_root, "data")
+    ]
+
+    if not any(full_path.startswith(d) for d in allowed_dirs):
+        raise HTTPException(status_code=403, detail="Cannot access files outside of allowed artifact directories")
+
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    if os.path.isdir(full_path):
+        raise HTTPException(status_code=400, detail="Cannot preview a directory")
+
+    try:
+        preview_lines = []
+        with open(full_path, "r", encoding="utf-8") as f:
+            for i, line in enumerate(f):
+                if i >= lines:
+                    break
+                preview_lines.append(line.rstrip('\n'))
+
+        preview_content = "\n".join(preview_lines)
+        return {"preview": preview_content}
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File is not a valid text file or is a binary file")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to preview artifact: {str(e)}")
+
 @app.get("/api/download_artifact", dependencies=[Depends(get_current_user)])
 async def download_artifact(artifact_path: str):
     """
