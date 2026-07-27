@@ -203,6 +203,64 @@ def test_upload_artifact_invalid_directory():
         if os.path.exists("dummy_local.txt"):
             os.remove("dummy_local.txt")
 
+def test_preview_artifact_valid():
+    with TestClient(app) as test_client:
+        with patch('web_app.backend.main.os.path.abspath') as mock_abspath:
+            # We want clean_path to correctly map to project_root to pass traversal checks
+            mock_abspath.side_effect = lambda p: "/mock/root" if p.endswith("../../") else (p if p.startswith("/mock/root") else f"/mock/root/{os.path.basename(p)}")
+            with patch('web_app.backend.main.os.path.exists', return_value=True):
+                with patch('web_app.backend.main.os.path.isdir', return_value=False):
+                    m = mock_open(read_data="line1\nline2\nline3\n")
+                    with patch('builtins.open', m):
+                        response = test_client.get("/api/preview_artifact?artifact_path=configs/test_config.py&lines=2", headers=ADMIN_HEADERS)
+                        assert response.status_code == 200
+                        assert response.json()["preview"] == "line1\nline2"
+
+def test_preview_artifact_unauthorized():
+    with TestClient(app) as test_client:
+        response = test_client.get("/api/preview_artifact?artifact_path=configs/test_config.py")
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Missing API Key"
+
+def test_preview_artifact_path_traversal():
+    with TestClient(app) as test_client:
+        original_abspath = os.path.abspath
+        def mock_abspath(path):
+            if path.endswith("../../"):
+                return "/mock/root"
+            if "traversal_test" in path:
+                return "/outside/path"
+            return original_abspath(path)
+
+        with patch('web_app.backend.main.os.path.abspath', side_effect=mock_abspath):
+            response = test_client.get("/api/preview_artifact?artifact_path=traversal_test", headers=ADMIN_HEADERS)
+            assert response.status_code == 403
+            assert "Path traversal is not allowed" in response.json()["detail"]
+
+def test_preview_artifact_not_found():
+    with TestClient(app) as test_client:
+        with patch('web_app.backend.main.os.path.abspath') as mock_abspath:
+            mock_abspath.side_effect = lambda p: "/mock/root" if p.endswith("../../") else (p if p.startswith("/mock/root") else f"/mock/root/{os.path.basename(p)}")
+            with patch('web_app.backend.main.os.path.exists', return_value=False):
+                response = test_client.get("/api/preview_artifact?artifact_path=configs/nonexistent.txt", headers=ADMIN_HEADERS)
+                assert response.status_code == 404
+                assert response.json()["detail"] == "Artifact not found"
+
+def test_preview_artifact_binary():
+    with TestClient(app) as test_client:
+        with patch('web_app.backend.main.os.path.abspath') as mock_abspath:
+            mock_abspath.side_effect = lambda p: "/mock/root" if p.endswith("../../") else (p if p.startswith("/mock/root") else f"/mock/root/{os.path.basename(p)}")
+            with patch('web_app.backend.main.os.path.exists', return_value=True):
+                with patch('web_app.backend.main.os.path.isdir', return_value=False):
+                    m = mock_open(read_data=b'\x80\x02\x8a\nl\xfc\x9cF\xf9 j\xa8P\x19.\x80\x02M\xe9')
+                    # We need to simulate UnicodeDecodeError when trying to decode bytes as text in our test
+                    # Since mock_open returns bytes directly if we give it bytes, we need to mock the iterator
+                    m.return_value.__iter__.side_effect = UnicodeDecodeError('utf-8', b'', 0, 1, 'invalid start byte')
+                    with patch('builtins.open', m):
+                        response = test_client.get("/api/preview_artifact?artifact_path=checkpoints/model.pth", headers=ADMIN_HEADERS)
+                        assert response.status_code == 400
+                        assert "File is not a valid text file" in response.json()["detail"]
+
 def test_delete_artifact_valid():
     # create dummy file
     import os
