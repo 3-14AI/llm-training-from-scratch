@@ -115,6 +115,14 @@
             </label>
             <button onclick="quickLaunch()" style="background-color: var(--tg-theme-button-color, #f39c12);">Quick Launch</button>
         </div>
+
+        <hr style="margin: 15px 0;">
+        <h4>Upload Config</h4>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="file" id="upload-config-file" accept=".json,.yaml,.yml" style="flex-grow: 1;" />
+            <button onclick="uploadConfig()" style="background-color: var(--tg-theme-button-color, #2980b9);">Upload</button>
+        </div>
+        <div id="upload-config-status" style="margin-top: 5px; font-size: 0.9em;"></div>
     </div>
 
     <div class="dashboard">
@@ -548,6 +556,57 @@
         }
 
 
+
+        async function uploadConfig() {
+            const fileInput = document.getElementById('upload-config-file');
+            const statusDiv = document.getElementById('upload-config-status');
+
+            if (fileInput.files.length === 0) {
+                statusDiv.textContent = 'Please select a config file first.';
+                statusDiv.style.color = 'red';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            statusDiv.textContent = `Uploading ${file.name}...`;
+            statusDiv.style.color = 'gray';
+            appendToTerminal(`> Uploading config ${file.name}...`, 'command');
+
+            try {
+                const apiKey = localStorage.getItem('api_key');
+                const headers = {};
+                if (apiKey) {
+                    headers['X-API-Key'] = apiKey;
+                }
+
+                const response = await fetch('/api/upload_config', {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    statusDiv.textContent = `Error: ${data.detail}`;
+                    statusDiv.style.color = 'red';
+                    appendToTerminal(`Error uploading config: ${data.detail}`, 'error');
+                } else {
+                    statusDiv.textContent = 'Success!';
+                    statusDiv.style.color = 'green';
+                    appendToTerminal(data.message, 'command');
+                    loadConfigs(); // refresh list
+                    fileInput.value = ''; // clear input
+                }
+            } catch (error) {
+                statusDiv.textContent = `Error: ${error.message}`;
+                statusDiv.style.color = 'red';
+                appendToTerminal(`Network Error: ${error.message}`, 'error');
+            }
+        }
 
         async function saveConfig() {
             const configName = document.getElementById('config-name').value.trim();

@@ -633,6 +633,37 @@ def get_datasets():
 
     return {"datasets": datasets}
 
+@app.post("/api/upload_config", dependencies=[Depends(require_admin)])
+async def upload_config(file: UploadFile = File(...)):
+    """
+    Uploads a configuration file to the configs/ directory.
+    Allowed extensions: .json, .yaml, .yml.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="file is required")
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in [".json", ".yaml", ".yml"]:
+        raise HTTPException(status_code=400, detail="Only .json, .yaml, and .yml files are allowed for configs")
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    configs_dir = os.path.join(project_root, "configs")
+
+    if not os.path.exists(configs_dir):
+        os.makedirs(configs_dir, exist_ok=True)
+
+    # Prevent path traversal in filename
+    clean_filename = os.path.basename(file.filename)
+    target_path = os.path.join(configs_dir, clean_filename)
+
+    import shutil
+    try:
+        with open(target_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        return {"message": f"Config {clean_filename} uploaded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload config: {str(e)}")
+
 @app.post("/api/upload_dataset", dependencies=[Depends(require_admin)])
 async def upload_dataset(file: UploadFile = File(...)):
     """

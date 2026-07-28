@@ -563,6 +563,45 @@ def test_get_datasets_unauthorized():
     response = client.get("/api/datasets")
     assert response.status_code == 401
 
+def test_upload_config_authorized_valid_ext():
+    import os
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+    configs_dir = os.path.join(project_root, "configs")
+
+    test_file_path = os.path.join(configs_dir, "test_config_upload.json")
+    if os.path.exists(test_file_path):
+        os.remove(test_file_path)
+
+    try:
+        response = client.post(
+            "/api/upload_config",
+            headers=ADMIN_HEADERS,
+            files={"file": ("test_config_upload.json", b'{"key": "value"}')}
+        )
+        assert response.status_code == 200
+        assert "uploaded successfully" in response.json()["message"]
+        assert os.path.exists(test_file_path)
+    finally:
+        if os.path.exists(test_file_path):
+            os.remove(test_file_path)
+
+def test_upload_config_invalid_ext():
+    response = client.post(
+        "/api/upload_config",
+        headers=ADMIN_HEADERS,
+        files={"file": ("test_config.txt", b"dummy content")}
+    )
+    assert response.status_code == 400
+    assert "Only .json, .yaml, and .yml files are allowed" in response.json()["detail"]
+
+def test_upload_config_viewer_forbidden():
+    response = client.post(
+        "/api/upload_config",
+        headers=VIEWER_HEADERS,
+        files={"file": ("test_config.json", b"{}")}
+    )
+    assert response.status_code == 403
+
 def test_upload_dataset_authorized():
     import os
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
